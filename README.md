@@ -11,15 +11,18 @@ Songwriters and producers who use Suno and want lyrics that actually sing: concr
 ## Key features
 
 - **Multi-pass generation** (not one-shot): scene/sensory extraction → story arc → draft → structure tags → anti-cliché rewrite → Suno optimize → style prompt
+- **Live streaming** of each pass into the progress UI (SSE via NanoGPT)
 - **Suno-accurate formatting**: section tags on their own lines; Style = sound only; negatives in Exclude Styles
 - **Anti-cliché craft**: constrained cliché families, show-don’t-tell prompting (Pat Pattison–inspired), local cliché/syllable feedback
+- **Prompt eval harness**: local scored checks (structure, chorus repeat, style rules, cliché density, syllables) with regression fixtures
+- **Generation history**: auto-save, pin, reopen, delete
 - **Genre templates** with style seeds and syllable targets
-- **Tools**: Make more specific, regenerate a section, refinement chat, copy buttons
+- **Tools**: Make more specific, regenerate a section, refinement chat, copy / save buttons
 - **Secure NanoGPT API key** storage (`flutter_secure_storage`)
 
 ## Platforms
 
-Native Flutter app for **Windows**, **Linux**, and **Android**. No web build required.
+Native Flutter app for **Windows**, **Linux**, and **Android**. No web build.
 
 ## Setup
 
@@ -75,7 +78,9 @@ flutter build apk
 2. Optionally load a **genre template** and select moods / constraints.
 3. Wait for the multi-pass pipeline (progress is shown per pass).
 4. Copy **Lyrics** into Suno’s Lyrics field and **Style** / **Exclude Styles** into the matching fields.
-5. Use **Make more specific**, section regenerate, or the refine chat to iterate without starting over.
+5. Check the **Prompt eval** score before pasting into Suno; re-run after manual edits.
+6. Use **Make more specific**, section regenerate, or the refine chat to iterate; **Save** keeps edits in History.
+7. Reopen past work from the **History** icon in the app bar.
 
 ## Project docs
 

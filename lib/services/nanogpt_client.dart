@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -12,6 +13,8 @@ class NanoGptException implements Exception {
   @override
   String toString() => 'NanoGptException($statusCode): $message';
 }
+
+typedef TokenCallback = void Function(String accumulated);
 
 /// Thin OpenAI-compatible client for NanoGPT chat completions.
 class NanoGptClient {
@@ -28,14 +31,36 @@ class NanoGptClient {
     required String user,
     double temperature = 0.7,
     int? maxTokens,
+    TokenCallback? onToken,
   }) async {
-    final apiKey = await settings.getApiKey();
-    if (apiKey == null || apiKey.isEmpty) {
-      throw NanoGptException(
-        'API key not set. Add your NanoGPT key in Settings.',
+    if (onToken != null) {
+      return chatStream(
+        system: system,
+        user: user,
+        temperature: temperature,
+        maxTokens: maxTokens,
+        onToken: onToken,
       );
     }
+    return _chatOnce(
+      system: system,
+      user: user,
+      temperature: temperature,
+      maxTokens: maxTokens,
+      stream: false,
+    );
+  }
 
+  /// SSE streaming chat completion. Calls [onToken] with the full accumulated
+  /// text so far after each content delta.
+  Future<String> chatStream({
+    required String system,
+    required String user,
+    double temperature = 0.7,
+    int? maxTokens,
+    TokenCallback? onToken,
+  }) async {
+    final apiKey = await _requireApiKey();
     final baseUrl = await settings.getBaseUrl();
     final model = await settings.getModel();
     final uri = Uri.parse('$baseUrl/chat/completions');
@@ -47,11 +72,108 @@ class NanoGptClient {
         {'role': 'user', 'content': user},
       ],
       'temperature': temperature,
-      'stream': false,
+      'stream': true,
     };
-    if (maxTokens != null) {
-      body['max_tokens'] = maxTokens;
+    if (maxTokens != null) body['max_tokens'] = maxTokens;
+
+    final request = http.Request('POST', uri)
+      ..headers.addAll({
+        'Authorization': 'Bearer $apiKey',
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
+      })
+      ..body = jsonEncode(body);
+
+    final response = await _http.send(request);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final errBody = await response.stream.bytesToString();
+      throw NanoGptException(
+        _extractError(errBody) ?? 'Request failed (${response.statusCode})',
+        statusCode: response.statusCode,
+      );
     }
+
+    final buffer = StringBuffer();
+    var lineCarry = '';
+
+    await for (final chunk in response.stream.transform(utf8.decoder)) {
+      lineCarry += chunk;
+      final lines = lineCarry.split('\n');
+      lineCarry = lines.removeLast();
+
+      for (var line in lines) {
+        line = line.trimRight();
+        if (line.isEmpty) continue;
+        if (line.startsWith(':')) continue; // SSE comment
+        if (!line.startsWith('data:')) continue;
+
+        var data = line.substring(5).trimLeft();
+        if (data == '[DONE]') {
+          onToken?.call(buffer.toString());
+          return buffer.toString().trim();
+        }
+
+        try {
+          final decoded = jsonDecode(data) as Map<String, dynamic>;
+          final choices = decoded['choices'] as List<dynamic>?;
+          if (choices == null || choices.isEmpty) continue;
+          final delta = choices.first['delta'] as Map<String, dynamic>?;
+          final content = delta?['content'] as String?;
+          if (content != null && content.isNotEmpty) {
+            buffer.write(content);
+            onToken?.call(buffer.toString());
+          }
+          // Some providers put full message in non-delta form mid-stream
+          final message = choices.first['message'] as Map<String, dynamic>?;
+          final msgContent = message?['content'] as String?;
+          if (msgContent != null &&
+              msgContent.isNotEmpty &&
+              buffer.isEmpty) {
+            buffer.write(msgContent);
+            onToken?.call(buffer.toString());
+          }
+        } catch (_) {
+          // ignore malformed SSE chunks
+        }
+      }
+    }
+
+    final text = buffer.toString().trim();
+    if (text.isEmpty) {
+      // Fallback: some hosts may not stream correctly
+      return _chatOnce(
+        system: system,
+        user: user,
+        temperature: temperature,
+        maxTokens: maxTokens,
+        stream: false,
+      );
+    }
+    return text;
+  }
+
+  Future<String> _chatOnce({
+    required String system,
+    required String user,
+    required double temperature,
+    int? maxTokens,
+    required bool stream,
+  }) async {
+    final apiKey = await _requireApiKey();
+    final baseUrl = await settings.getBaseUrl();
+    final model = await settings.getModel();
+    final uri = Uri.parse('$baseUrl/chat/completions');
+
+    final body = <String, dynamic>{
+      'model': model,
+      'messages': [
+        {'role': 'system', 'content': system},
+        {'role': 'user', 'content': user},
+      ],
+      'temperature': temperature,
+      'stream': stream,
+    };
+    if (maxTokens != null) body['max_tokens'] = maxTokens;
 
     final response = await _http.post(
       uri,
@@ -82,6 +204,16 @@ class NanoGptClient {
       throw NanoGptException('Model returned empty content');
     }
     return content.trim();
+  }
+
+  Future<String> _requireApiKey() async {
+    final apiKey = await settings.getApiKey();
+    if (apiKey == null || apiKey.isEmpty) {
+      throw NanoGptException(
+        'API key not set. Add your NanoGPT key in Settings.',
+      );
+    }
+    return apiKey;
   }
 
   String? _extractError(String body) {

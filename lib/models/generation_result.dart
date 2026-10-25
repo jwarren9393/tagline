@@ -43,6 +43,33 @@ class GenerationResult {
 
   bool get hasLyrics => lyrics.trim().isNotEmpty;
   bool get hasStyle => stylePrompt.trim().isNotEmpty;
+
+  Map<String, dynamic> toJson() => {
+        'lyrics': lyrics,
+        'stylePrompt': stylePrompt,
+        'excludeStyles': excludeStyles,
+        'title': title,
+        'notes': notes,
+        'passArtifacts': passArtifacts,
+      };
+
+  factory GenerationResult.fromJson(Map<String, dynamic> json) {
+    final artifactsRaw = json['passArtifacts'];
+    final artifacts = <String, String>{};
+    if (artifactsRaw is Map) {
+      artifactsRaw.forEach((k, v) {
+        artifacts[k.toString()] = v?.toString() ?? '';
+      });
+    }
+    return GenerationResult(
+      lyrics: json['lyrics'] as String? ?? '',
+      stylePrompt: json['stylePrompt'] as String? ?? '',
+      excludeStyles: json['excludeStyles'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      notes: json['notes'] as String? ?? '',
+      passArtifacts: artifacts,
+    );
+  }
 }
 
 /// Status of a single pipeline pass.

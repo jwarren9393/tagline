@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/generation_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/eval_panel.dart';
 import '../widgets/feedback_panel.dart';
 import '../widgets/output_panel.dart';
 
@@ -68,6 +69,20 @@ class _ResultsScreenState extends State<ResultsScreen> {
           icon: const Icon(Icons.refresh, size: 18),
           label: const Text('Regenerate section'),
         ),
+        OutlinedButton.icon(
+          onPressed: gen.busy
+              ? null
+              : () async {
+                  await gen.saveEdits();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Saved to history')),
+                    );
+                  }
+                },
+          icon: const Icon(Icons.save_outlined, size: 18),
+          label: const Text('Save'),
+        ),
         if (gen.busy)
           const Padding(
             padding: EdgeInsets.only(left: 8),
@@ -112,6 +127,13 @@ class _ResultsScreenState extends State<ResultsScreen> {
           maxLines: 6,
           onChanged: gen.setExcludeLocally,
         ),
+        if (gen.evalSummary != null) ...[
+          const SizedBox(height: 12),
+          EvalPanel(
+            summary: gen.evalSummary!,
+            onReevaluate: gen.reevaluate,
+          ),
+        ],
         if (gen.feedback != null) ...[
           const SizedBox(height: 12),
           FeedbackPanel(feedback: gen.feedback!),

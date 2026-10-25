@@ -13,13 +13,15 @@ Future<void> main() async {
   final settings = SettingsProvider(secure);
   await settings.load();
 
+  final generation = GenerationProvider(secure);
+  // Warm history cache in the background
+  generation.loadHistory();
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: settings),
-        ChangeNotifierProvider(
-          create: (_) => GenerationProvider(secure),
-        ),
+        ChangeNotifierProvider.value(value: generation),
       ],
       child: const TaglineApp(),
     ),

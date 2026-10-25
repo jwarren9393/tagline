@@ -247,18 +247,49 @@ Prefer unit tests for pipeline helpers (`syllable_analyzer_test.dart`, idea prom
 
 ---
 
-## 12. How to extend (guidance for future AIs)
+## 12. Generation history
+
+- Model: `GenerationSession` (`id`, timestamps, `SongIdea`, `GenerationResult`, optional `EvalSummary`, `pinned`)
+- Store: `HistoryStore` → `tagline_history.json` in application documents directory (`path_provider`)
+- Cap: 200 sessions (drops oldest unpinned first)
+- Auto-upsert after successful generate and after tools that change lyrics; manual **Save** on results screen
+- UI: `HistoryScreen` (open / pin / delete)
+
+## 13. Streaming
+
+- `NanoGptClient.chatStream` / `chat(..., onToken:)` uses SSE (`Accept: text/event-stream`, `stream: true`)
+- Pipeline passes update `PipelinePass.output` live; `PassProgressList` shows a scrolling monospace preview
+- `GenerationProvider` throttles `notifyListeners` (~40ms) during streams
+- Empty stream buffer falls back to a non-stream request once
+
+## 14. Prompt eval harness
+
+- Service: `PromptEval` → `EvalSummary` with weighted checks:
+  - structure tags, chorus present/verbatim, tags on own lines
+  - style: no story/tags, no inline negatives, genre-first, BPM/tempo
+  - char budgets, cliché density, syllable consistency, line length
+- Fixtures: `lib/data/eval_fixtures.dart` (synthetic good vs bad)
+- Tests: `test/prompt_eval_test.dart` — **good ≥ 85%**, **bad &lt; 65%**
+- Shown on results via `EvalPanel`; score stored on sessions
+
+When changing prompts or craft rules, update fixtures if needed and keep the regression gate green:
+```bash
+flutter test test/prompt_eval_test.dart
+```
+
+## 15. How to extend (guidance for future AIs)
 
 ### Improving lyric quality
 1. Edit `lib/prompts/system_prompts.dart` few-shots and rules first.
 2. Expand `cliche_families.dart` only with high-frequency offenders.
-3. Optionally add a pass or tighten temperatures — keep the multi-pass philosophy.
+3. Keep `prompt_eval_test` green; tighten checks before adding LLM-as-judge.
 
-### Adding persistence
-Introduce a `Session` / `Project` model + local JSON or SQLite; wire from `GenerationProvider` without changing prompt contracts.
-
-### Adding streaming
-Extend `NanoGptClient` with SSE parsing (`stream: true`); update pass UI to show token tails. Subscription and API hosts both support streaming per NanoGPT docs.
+### Natural next features
+- Export lyrics/style as `.txt` / share sheet
+- History search + tags
+- Optional LLM judge pass scored against the same rubric
+- A/B prompt experiment mode using eval scores
+- User “reference generation notes” after pasting into Suno (close the feedback loop)
 
 ### Do not
 - Collapse to single-shot generation for “speed.”
@@ -268,13 +299,15 @@ Extend `NanoGptClient` with SSE parsing (`stream: true`); update pass UI to show
 
 ---
 
-## 13. Current implementation snapshot
+## 16. Current implementation snapshot
 
-As of initial scaffold + core flow:
-- Full multi-pass pipeline wired end-to-end
-- Primary screens implemented
-- Settings with secure key storage
-- Genre templates + local feedback + refinement tools
-- Not yet: save history, streaming, share/export files, automated prompt eval harness
+As of the history + streaming + eval milestone:
+- Full multi-pass pipeline with SSE streaming into the generating UI
+- History persistence (`HistoryStore` / `tagline_history.json`) + History UI (pin/delete/reopen)
+- Prompt eval harness (`PromptEval`) with Eval panel and fixture regression tests
+- Primary screens, settings, genre templates, local feedback, refinement tools
+- Dependencies: `path_provider`, `path` (history); existing NanoGPT / Provider stack
+- Platforms: Windows, Linux, Android only (no web)
+- Not yet: export/share, LLM judge, A/B experiments, Suno result feedback loop
 
 When you change any of the above, update this file, `AGENTS.md`, and `README.md`.

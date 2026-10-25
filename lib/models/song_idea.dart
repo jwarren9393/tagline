@@ -69,4 +69,27 @@ class SongIdea {
   }
 
   bool get isValid => rawIdea.trim().length >= 8;
+
+  Map<String, dynamic> toJson() => {
+        'rawIdea': rawIdea,
+        'genreId': genreId,
+        'moods': moods,
+        'constraints': constraints,
+        'referenceVibes': referenceVibes,
+        'titleHint': titleHint,
+      };
+
+  factory SongIdea.fromJson(Map<String, dynamic> json) {
+    return SongIdea(
+      rawIdea: json['rawIdea'] as String? ?? '',
+      genreId: json['genreId'] as String?,
+      moods: (json['moods'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      constraints: json['constraints'] as String? ?? '',
+      referenceVibes: json['referenceVibes'] as String? ?? '',
+      titleHint: json['titleHint'] as String? ?? '',
+    );
+  }
 }

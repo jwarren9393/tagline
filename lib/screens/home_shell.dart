@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/generation_provider.dart';
 import '../theme/app_theme.dart';
 import 'generating_screen.dart';
+import 'history_screen.dart';
 import 'idea_intake_screen.dart';
 import 'results_screen.dart';
 import 'settings_screen.dart';
@@ -43,6 +44,15 @@ class HomeShell extends StatelessWidget {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'History',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const HistoryScreen()),
+              );
+            },
+            icon: const Icon(Icons.history),
+          ),
           IconButton(
             tooltip: 'Settings',
             onPressed: () {

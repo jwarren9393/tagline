@@ -58,7 +58,45 @@ class LyricPipeline {
     var passes = initialPasses();
     void update(int index, PipelinePass pass) {
       passes = List<PipelinePass>.from(passes)..[index] = pass;
-      onProgress?.call(passes);
+      onProgress?.call(List.unmodifiable(passes));
+    }
+
+    Future<String> runPass({
+      required int index,
+      required String system,
+      required String user,
+      required double temperature,
+      bool stripFences = false,
+    }) async {
+      update(index, passes[index].copyWith(status: PassStatus.running, output: ''));
+      try {
+        final raw = await _client.chat(
+          system: system,
+          user: user,
+          temperature: temperature,
+          onToken: (accumulated) {
+            update(
+              index,
+              passes[index].copyWith(
+                status: PassStatus.running,
+                output: accumulated,
+              ),
+            );
+          },
+        );
+        final text = stripFences ? _stripFences(raw) : raw;
+        update(
+          index,
+          passes[index].copyWith(status: PassStatus.done, output: text),
+        );
+        return text;
+      } catch (e) {
+        update(
+          index,
+          passes[index].copyWith(status: PassStatus.failed, error: '$e'),
+        );
+        rethrow;
+      }
     }
 
     final artifacts = <String, String>{};
@@ -66,89 +104,51 @@ class LyricPipeline {
     final genreSeed = idea.genre?.styleSeed ?? '';
     final excludeSeed = idea.genre?.excludeSeed ?? '';
 
-    // Pass 1 — scenes
-    update(0, passes[0].copyWith(status: PassStatus.running));
-    late final String scenesJson;
-    try {
-      scenesJson = await _client.chat(
-        system: SystemPrompts.sceneExtractionSystem(),
-        user: ideaBlock,
-        temperature: 0.8,
-      );
-      artifacts['scenes'] = scenesJson;
-      update(0, passes[0].copyWith(status: PassStatus.done, output: scenesJson));
-    } catch (e) {
-      update(0, passes[0].copyWith(status: PassStatus.failed, error: '$e'));
-      rethrow;
-    }
+    final scenesJson = await runPass(
+      index: 0,
+      system: SystemPrompts.sceneExtractionSystem(),
+      user: ideaBlock,
+      temperature: 0.8,
+    );
+    artifacts['scenes'] = scenesJson;
 
-    // Pass 2 — arc
-    update(1, passes[1].copyWith(status: PassStatus.running));
-    late final String arcJson;
-    try {
-      arcJson = await _client.chat(
-        system: SystemPrompts.arcOutlineSystem(),
-        user: '$ideaBlock\n\nSCENE BANK:\n$scenesJson',
-        temperature: 0.7,
-      );
-      artifacts['arc'] = arcJson;
-      update(1, passes[1].copyWith(status: PassStatus.done, output: arcJson));
-    } catch (e) {
-      update(1, passes[1].copyWith(status: PassStatus.failed, error: '$e'));
-      rethrow;
-    }
+    final arcJson = await runPass(
+      index: 1,
+      system: SystemPrompts.arcOutlineSystem(),
+      user: '$ideaBlock\n\nSCENE BANK:\n$scenesJson',
+      temperature: 0.7,
+    );
+    artifacts['arc'] = arcJson;
 
-    // Pass 3 — draft
-    update(2, passes[2].copyWith(status: PassStatus.running));
-    late String lyrics;
-    try {
-      lyrics = await _client.chat(
-        system: SystemPrompts.draftLyricsSystem(),
-        user: '$ideaBlock\n\nSCENE BANK:\n$scenesJson\n\nARC:\n$arcJson',
-        temperature: 0.85,
-      );
-      lyrics = _stripFences(lyrics);
-      artifacts['draft'] = lyrics;
-      update(2, passes[2].copyWith(status: PassStatus.done, output: lyrics));
-    } catch (e) {
-      update(2, passes[2].copyWith(status: PassStatus.failed, error: '$e'));
-      rethrow;
-    }
+    var lyrics = await runPass(
+      index: 2,
+      system: SystemPrompts.draftLyricsSystem(),
+      user: '$ideaBlock\n\nSCENE BANK:\n$scenesJson\n\nARC:\n$arcJson',
+      temperature: 0.85,
+      stripFences: true,
+    );
+    artifacts['draft'] = lyrics;
 
-    // Pass 4 — structure
-    update(3, passes[3].copyWith(status: PassStatus.running));
-    try {
-      lyrics = await _client.chat(
-        system: SystemPrompts.structurePassSystem(),
-        user: 'Normalize structure for Suno:\n\n$lyrics',
-        temperature: 0.3,
-      );
-      lyrics = _stripFences(lyrics);
-      artifacts['structure'] = lyrics;
-      update(3, passes[3].copyWith(status: PassStatus.done, output: lyrics));
-    } catch (e) {
-      update(3, passes[3].copyWith(status: PassStatus.failed, error: '$e'));
-      rethrow;
-    }
+    lyrics = await runPass(
+      index: 3,
+      system: SystemPrompts.structurePassSystem(),
+      user: 'Normalize structure for Suno:\n\n$lyrics',
+      temperature: 0.3,
+      stripFences: true,
+    );
+    artifacts['structure'] = lyrics;
 
-    // Pass 5 — cliché rewrite
-    update(4, passes[4].copyWith(status: PassStatus.running));
-    try {
-      lyrics = await _client.chat(
-        system: SystemPrompts.clicheRewriteSystem(),
-        user: 'Rewrite for specificity:\n\n$lyrics\n\nSCENE BANK:\n$scenesJson',
-        temperature: 0.75,
-      );
-      lyrics = _stripFences(lyrics);
-      artifacts['cliche'] = lyrics;
-      update(4, passes[4].copyWith(status: PassStatus.done, output: lyrics));
-    } catch (e) {
-      update(4, passes[4].copyWith(status: PassStatus.failed, error: '$e'));
-      rethrow;
-    }
+    lyrics = await runPass(
+      index: 4,
+      system: SystemPrompts.clicheRewriteSystem(),
+      user: 'Rewrite for specificity:\n\n$lyrics\n\nSCENE BANK:\n$scenesJson',
+      temperature: 0.75,
+      stripFences: true,
+    );
+    artifacts['cliche'] = lyrics;
 
-    // Pass 6 — optimize (JSON)
-    update(5, passes[5].copyWith(status: PassStatus.running));
+    // Optimize (JSON)
+    update(5, passes[5].copyWith(status: PassStatus.running, output: ''));
     var title = '';
     var notes = '';
     try {
@@ -156,6 +156,15 @@ class LyricPipeline {
         system: SystemPrompts.sunoOptimizeSystem(),
         user: 'Optimize for Suno delivery:\n\n$lyrics',
         temperature: 0.5,
+        onToken: (accumulated) {
+          update(
+            5,
+            passes[5].copyWith(
+              status: PassStatus.running,
+              output: accumulated,
+            ),
+          );
+        },
       );
       artifacts['optimize_raw'] = optimized;
       try {
@@ -174,8 +183,8 @@ class LyricPipeline {
       rethrow;
     }
 
-    // Pass 7 — style (can use genre seed)
-    update(6, passes[6].copyWith(status: PassStatus.running));
+    // Style
+    update(6, passes[6].copyWith(status: PassStatus.running, output: ''));
     var style = genreSeed;
     var exclude = excludeSeed;
     try {
@@ -196,6 +205,15 @@ FINAL LYRICS (for mood/energy cues only — do NOT put story in style):
 $lyrics
 ''',
         temperature: 0.6,
+        onToken: (accumulated) {
+          update(
+            6,
+            passes[6].copyWith(
+              status: PassStatus.running,
+              output: accumulated,
+            ),
+          );
+        },
       );
       artifacts['style_raw'] = styleRaw;
       try {
@@ -220,7 +238,6 @@ $lyrics
       );
     } catch (e) {
       update(6, passes[6].copyWith(status: PassStatus.failed, error: '$e'));
-      // Style failure is non-fatal if we have a genre seed
       if (style.isEmpty) rethrow;
     }
 
@@ -234,11 +251,15 @@ $lyrics
     );
   }
 
-  Future<String> makeMoreSpecific(String lyrics) async {
+  Future<String> makeMoreSpecific(
+    String lyrics, {
+    TokenCallback? onToken,
+  }) async {
     final out = await _client.chat(
       system: SystemPrompts.makeMoreSpecificSystem(),
       user: lyrics,
       temperature: 0.75,
+      onToken: onToken,
     );
     return _stripFences(out);
   }
@@ -246,11 +267,13 @@ $lyrics
   Future<String> regenerateSection({
     required String lyrics,
     required String sectionTag,
+    TokenCallback? onToken,
   }) async {
     final out = await _client.chat(
       system: SystemPrompts.regenerateSectionSystem(sectionTag),
       user: lyrics,
       temperature: 0.8,
+      onToken: onToken,
     );
     return _stripFences(out);
   }
@@ -258,11 +281,13 @@ $lyrics
   Future<String> refineChat({
     required String historyContext,
     required String userMessage,
+    TokenCallback? onToken,
   }) async {
     return _client.chat(
       system: SystemPrompts.refinementChatSystem(),
       user: '$historyContext\n\nUSER: $userMessage',
       temperature: 0.7,
+      onToken: onToken,
     );
   }
 
