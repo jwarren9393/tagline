@@ -15,90 +15,71 @@ lib/
   models/
     song_idea.dart
     generation_result.dart
-    generation_session.dart   # Persisted session + EvalSummary
+    generation_session.dart   # + tags, sunoFeedback, llmJudgeNotes, AbComparison
   data/
-    cliche_families.dart
-    genre_templates.dart
-    eval_fixtures.dart        # Good/bad fixtures for PromptEval tests
-  prompts/
-    system_prompts.dart       # ALL craft expertise + few-shots + Suno rules
+    cliche_families.dart, genre_templates.dart, eval_fixtures.dart
+  prompts/system_prompts.dart # craft + judge + A/B variant B draft
   services/
-    secure_settings.dart
-    nanogpt_client.dart       # Non-stream + SSE stream chat
-    lyric_pipeline.dart       # Multi-pass; streams tokens into pass.output
-    history_store.dart        # JSON history in app documents dir
-    prompt_eval.dart          # Deterministic quality harness
-    syllable_analyzer.dart
-    cliche_detector.dart
-  providers/
-    settings_provider.dart
-    generation_provider.dart  # AppView + history + eval + throttled stream UI
+    nanogpt_client.dart       # SSE streaming
+    lyric_pipeline.dart       # multi-pass + generateLyricBranch (A/B)
+    history_store.dart
+    prompt_eval.dart          # local harness
+    llm_judge.dart            # optional LLM second opinion
+    export_service.dart       # copy/share Suno pack
+    syllable_analyzer.dart, cliche_detector.dart, secure_settings.dart
+  providers/generation_provider.dart
   screens/
-    home_shell.dart           # History + Settings actions
-    idea_intake_screen.dart
-    generating_screen.dart    # Live streaming pass previews
-    results_screen.dart       # Eval panel + Save
-    history_screen.dart
-    settings_screen.dart
+    home_shell.dart           # SafeArea + system nav bar styling
+    idea_intake_screen.dart  # growing TextFields (maxLines: null)
+    generating_screen.dart, results_screen.dart, history_screen.dart, settings_screen.dart
   widgets/
-    output_panel, copy_button, pass_progress, feedback_panel, eval_panel
+    output_panel.dart         # growing editable fields for page scroll
+    pass_progress, eval_panel, feedback_panel, copy_button
 ```
-
-State: **Provider**. API: **NanoGPT** (subscription endpoint by default). History file: `tagline_history.json` via `path_provider`.
 
 ## Feature status
 
 | Feature | Status |
 |---------|--------|
-| Idea intake (text, genre, moods, constraints) | Done |
-| Multi-pass lyric + style pipeline (7 passes) | Done |
-| SSE streaming into pass progress UI | Done |
-| Auto-save + History screen (pin/delete/reopen) | Done |
-| Prompt eval harness + fixtures/tests | Done |
-| Settings (API key, model, subscription toggle) | Done |
-| Output panels + copy / make specific / regen / chat | Done |
-| Local cliché + syllable feedback | Done |
-| Genre templates | Done |
-| Export .txt / share sheet | Not started |
-| LLM-as-judge secondary eval | Not started |
-| Side-by-side A/B prompt experiments | Not started |
-| iOS / macOS / web | Out of scope for now |
-| Offline / mock generation without API | Not started |
+| Idea intake / multi-pass / streaming | Done |
+| SafeArea vs Android gesture/nav bar | Done |
+| Growing fields so page scroll works from inside inputs | Done |
+| View/edit original prompt on results; regenerate / new idea | Done |
+| History reuse-prompt action | Done |
+| History search + tag filter; session tags | Done |
+| Export: copy pack + share sheet (`share_plus`) | Done |
+| Suno feedback notes (saved + fed into Refine) | Done |
+| Local prompt eval + LLM judge | Done |
+| A/B lyric branch experiment (A standard / B specificity) | Done |
+| Anima-style API & connection settings (catalog/credits/favorites) | Done |
+| Offline mock generation | Not started |
+| iOS / macOS / web | Out of scope |
 
-## Important constraints (do not break)
+## Important constraints
 
-### Suno formatting
-- **Style** = sound only (genre first, then mood, vocal, instruments, production, BPM). No story. No section tags. No inline “no X”.
-- **Exclude Styles** = negatives only.
-- **Lyrics** = words + `[Tags]` on their own lines. Ad-libs in `(parentheses)`.
-- Stay under practical limits (~1k style/exclude, ~5k lyrics).
-
-### Lyric quality
-- Expertise lives in `lib/prompts/system_prompts.dart`.
-- Pipeline must remain **multi-pass**.
-- When changing prompts, run `flutter test test/prompt_eval_test.dart` — good fixture must stay ≥85%, bad fixture &lt;65%.
-
-### Security
+- Suno Style = sound only; Exclude = negatives; Lyrics = words + `[tags]`.
+- Multi-pass required; keep `prompt_eval_test` green when changing craft rules.
 - Never commit API keys.
+- Platforms: Windows / Linux / Android only.
 
 ## Recent decisions
 
-- Streaming is default for all chat calls used by the pipeline (`onToken` → SSE).
-- Generations auto-persist after success; manual **Save** re-evals and upserts edits.
-- `PromptEval` is local/deterministic (no API) so we can regress prompt quality without Suno credits.
-- Stream UI notifies are throttled (~40ms) in `GenerationProvider`.
-- Platforms remain Windows / Linux / Android only — do not add a `web/` target unless explicitly requested.
+- Multiline fields use `maxLines: null` so the **parent** `ScrollView` owns vertical drag (fixes phone scroll-from-field).
+- `HomeShell` uses `SafeArea(bottom: true)` + nav bar `SystemUiOverlayStyle` so UI clears the system gesture bar.
+- Results always show **Your prompt** with regenerate / edit-as-new.
+- A/B reuses scene+arc artifacts; only re-runs draft→optimize for variants A/B; keeps higher local eval.
+- Refine chat includes original prompt + Suno feedback + LLM judge notes when present.
+- API settings follow Anima NanoGPT UX (not theme): live `models?detailed=true`, credits sheet (wallet + subscription usage), filters, browse sheet, favorites, separate key vs model saves. Pay-as-you-go base = `https://nano-gpt.com/api/v1`. No image-model section (Tagline does not generate images).
 
 ## Known issues / TODOs
 
-- Widget pumps of full `TaglineApp` can hang on Google Fonts; keep tests service-level.
-- `OutputPanel` ignores external text updates while focused (by design).
-- History has no search/filter yet.
-- If a host fails SSE, client falls back to non-stream once for empty buffers.
+- Full `TaglineApp` widget tests can hang on Google Fonts — keep service tests.
+- A/B does not regenerate Style (keeps current style for scoring consistency).
+- Share sheet behavior varies by Android OEM.
 
-## Agent working rules for this repo
+## Agent working rules
 
-1. After meaningful code changes, update **AGENTS.md**, **README.md**, and **PROJECT_REFERENCE.md**.
-2. Prefer improving prompts/pipeline quality over speculative ML or complex UI.
-3. Do not add web/iOS/macOS targets unless requested.
-4. Keep commits focused; do not commit secrets.
+1. Update **AGENTS.md**, **README.md**, **PROJECT_REFERENCE.md** after meaningful changes.
+2. Prefer prompt/pipeline quality over speculative UI.
+3. No web/iOS/macOS unless requested.
+4. No secrets in git.

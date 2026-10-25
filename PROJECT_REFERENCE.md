@@ -299,15 +299,52 @@ flutter test test/prompt_eval_test.dart
 
 ---
 
-## 16. Current implementation snapshot
+## 16. Mobile UX notes
 
-As of the history + streaming + eval milestone:
-- Full multi-pass pipeline with SSE streaming into the generating UI
-- History persistence (`HistoryStore` / `tagline_history.json`) + History UI (pin/delete/reopen)
-- Prompt eval harness (`PromptEval`) with Eval panel and fixture regression tests
-- Primary screens, settings, genre templates, local feedback, refinement tools
-- Dependencies: `path_provider`, `path` (history); existing NanoGPT / Provider stack
-- Platforms: Windows, Linux, Android only (no web)
-- Not yet: export/share, LLM judge, A/B experiments, Suno result feedback loop
+- `SafeArea(bottom: true)` on `HomeShell` / History / Settings; `SystemUiOverlayStyle` for nav bar contrast.
+- Editable multiline fields use `maxLines: null` (grow with content) so parent `SingleChildScrollView` / `CustomScrollView` receives vertical drags — avoids “must scroll in the tiny gutter” on phones.
+- `keyboardDismissBehavior: onDrag` on major scroll views.
+- Android `INTERNET` permission declared; `windowSoftInputMode=adjustResize`.
+
+## 17. Prompt reuse
+
+- Results screen **Your prompt** panel edits `SongIdea.rawIdea`.
+- Actions: **Regenerate from this prompt** (same session), **Edit as new idea** / **New from prompt** (intake with text preserved via `ideaEditToken`).
+- History tile **Reuse prompt** loads idea into intake without opening outputs.
+
+## 18. Export, feedback, judge, A/B
+
+- `ExportService.buildPack` / `sharePack` — Style, Exclude, Lyrics, original prompt.
+- `sunoFeedback` on session; included in Refine context.
+- `LlmJudge` → JSON score/summary/strengths/fixes; stored as `llmJudgeNotes`.
+- `runAbExperiment` reuses `passArtifacts['scenes'|'arc']`, runs branch A (standard draft) vs B (`draftLyricsSystemVariantB`), keeps higher `PromptEval` lyrics; stores `AbComparison` + both lyrics in artifacts.
+
+## 19. API & connection (Anima-parity)
+
+Settings screen rebuilt to match Anima’s NanoGPT connection UX (Tagline theme):
+- Key save/remove via secure storage (separate from model save)
+- Credits sheet: `POST /api/check-balance` + `GET /api/subscription/v1/usage` in parallel
+- Live catalog: `GET {baseUrl}/models?detailed=true`
+- Filters: Category (incl. broad uncensored) → Min context → Provider (Auto first)
+- Selected model card + Browse sheet (search, perf filters/sort, favorites)
+- Runtime stats: `GET /api/models/{id}/providers` (TPS/TTFT/uptime), session-cached
+- Subscription toggle switches base URL and reloads catalog
+  - Off: `https://nano-gpt.com/api/v1`
+  - On: `https://nano-gpt.com/api/subscription/v1`
+- No image-model UI (Tagline does not generate images)
+- Code: `lib/models/nanogpt_catalog.dart`, `lib/services/nanogpt_catalog_service.dart`,
+  `lib/screens/settings_screen.dart`, `lib/widgets/browse_models_sheet.dart`, `credits_sheet.dart`
+
+## 20. Current implementation snapshot
+
+As of the Anima-style API settings milestone:
+- SafeArea / scroll-from-field fixes
+- Prompt visibility + regenerate / new-idea / history reuse
+- Export/share, Suno feedback, history search+tags, LLM judge, A/B
+- Live NanoGPT catalog / credits / favorites settings
+- Prior: streaming, history persistence, local eval, multi-pass, genre templates
+- Dependencies: `share_plus`, `path_provider`, `path`, …
+- Platforms: Windows, Linux, Android only
+- Not yet: offline mock generation, cross-device sync
 
 When you change any of the above, update this file, `AGENTS.md`, and `README.md`.

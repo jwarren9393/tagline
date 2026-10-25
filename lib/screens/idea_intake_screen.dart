@@ -58,10 +58,11 @@ class _IdeaIntakeScreenState extends State<IdeaIntakeScreen> {
     final wide = MediaQuery.sizeOf(context).width >= 900;
 
     return CustomScrollView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -109,7 +110,7 @@ class _IdeaIntakeScreenState extends State<IdeaIntakeScreen> {
           ),
         ),
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
           sliver: SliverToBoxAdapter(
             child: wide
                 ? Row(
@@ -139,8 +140,10 @@ class _IdeaIntakeScreenState extends State<IdeaIntakeScreen> {
       children: [
         TextField(
           controller: _idea,
-          minLines: 8,
-          maxLines: 14,
+          minLines: 5,
+          maxLines: null, // grow with content → page scroll owns gestures
+          keyboardType: TextInputType.multiline,
+          textInputAction: TextInputAction.newline,
           onChanged: (_) => _sync(gen),
           decoration: const InputDecoration(
             labelText: 'Song idea',
@@ -162,6 +165,8 @@ class _IdeaIntakeScreenState extends State<IdeaIntakeScreen> {
         const SizedBox(height: 14),
         TextField(
           controller: _vibes,
+          minLines: 1,
+          maxLines: null,
           onChanged: (_) => _sync(gen),
           decoration: const InputDecoration(
             labelText: 'Reference vibes (optional)',
@@ -172,7 +177,7 @@ class _IdeaIntakeScreenState extends State<IdeaIntakeScreen> {
         TextField(
           controller: _constraints,
           minLines: 2,
-          maxLines: 4,
+          maxLines: null,
           onChanged: (_) => _sync(gen),
           decoration: const InputDecoration(
             labelText: 'Constraints (optional)',

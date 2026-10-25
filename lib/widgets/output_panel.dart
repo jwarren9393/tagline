@@ -11,9 +11,12 @@ class OutputPanel extends StatefulWidget {
     this.subtitle,
     this.editable = false,
     this.onChanged,
-    this.minLines = 8,
-    this.maxLines = 20,
+    this.minLines = 4,
+    /// When null, the field grows with content so the parent scroll view
+    /// owns vertical scrolling (mobile-friendly).
+    this.maxLines,
     this.footer,
+    this.actions,
   });
 
   final String title;
@@ -22,8 +25,9 @@ class OutputPanel extends StatefulWidget {
   final bool editable;
   final ValueChanged<String>? onChanged;
   final int minLines;
-  final int maxLines;
+  final int? maxLines;
   final Widget? footer;
+  final List<Widget>? actions;
 
   @override
   State<OutputPanel> createState() => _OutputPanelState();
@@ -91,6 +95,7 @@ class _OutputPanelState extends State<OutputPanel> {
                     ],
                   ),
                 ),
+                if (widget.actions != null) ...widget.actions!,
                 CopyButton(label: 'Copy', text: widget.text),
               ],
             ),
@@ -103,8 +108,11 @@ class _OutputPanelState extends State<OutputPanel> {
                     controller: _controller,
                     focusNode: _focus,
                     onChanged: widget.onChanged,
+                    // Growing field: parent scroll view handles page scroll.
                     maxLines: widget.maxLines,
                     minLines: widget.minLines,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
                     style: const TextStyle(
                       fontFamily: 'monospace',
                       fontSize: 13.5,

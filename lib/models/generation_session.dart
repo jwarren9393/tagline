@@ -11,6 +11,10 @@ class GenerationSession {
     required this.result,
     this.evalSummary,
     this.pinned = false,
+    this.tags = const [],
+    this.sunoFeedback = '',
+    this.llmJudgeNotes = '',
+    this.abComparison,
   });
 
   final String id;
@@ -20,6 +24,16 @@ class GenerationSession {
   GenerationResult result;
   EvalSummary? evalSummary;
   bool pinned;
+  List<String> tags;
+
+  /// User notes after pasting into Suno (what rushed, what worked).
+  String sunoFeedback;
+
+  /// Optional LLM-as-judge commentary.
+  String llmJudgeNotes;
+
+  /// Last A/B experiment summary, if any.
+  AbComparison? abComparison;
 
   String get displayTitle {
     final t = result.title.trim();
@@ -41,7 +55,12 @@ class GenerationSession {
     GenerationResult? result,
     EvalSummary? evalSummary,
     bool? pinned,
+    List<String>? tags,
+    String? sunoFeedback,
+    String? llmJudgeNotes,
+    AbComparison? abComparison,
     bool clearEval = false,
+    bool clearAb = false,
   }) {
     return GenerationSession(
       id: id,
@@ -51,6 +70,10 @@ class GenerationSession {
       result: result ?? this.result,
       evalSummary: clearEval ? null : (evalSummary ?? this.evalSummary),
       pinned: pinned ?? this.pinned,
+      tags: tags ?? this.tags,
+      sunoFeedback: sunoFeedback ?? this.sunoFeedback,
+      llmJudgeNotes: llmJudgeNotes ?? this.llmJudgeNotes,
+      abComparison: clearAb ? null : (abComparison ?? this.abComparison),
     );
   }
 
@@ -62,6 +85,10 @@ class GenerationSession {
         'result': result.toJson(),
         'evalSummary': evalSummary?.toJson(),
         'pinned': pinned,
+        'tags': tags,
+        'sunoFeedback': sunoFeedback,
+        'llmJudgeNotes': llmJudgeNotes,
+        'abComparison': abComparison?.toJson(),
       };
 
   factory GenerationSession.fromJson(Map<String, dynamic> json) {
@@ -77,6 +104,51 @@ class GenerationSession {
               json['evalSummary'] as Map<String, dynamic>,
             ),
       pinned: json['pinned'] as bool? ?? false,
+      tags: (json['tags'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      sunoFeedback: json['sunoFeedback'] as String? ?? '',
+      llmJudgeNotes: json['llmJudgeNotes'] as String? ?? '',
+      abComparison: json['abComparison'] == null
+          ? null
+          : AbComparison.fromJson(
+              json['abComparison'] as Map<String, dynamic>,
+            ),
+    );
+  }
+}
+
+class AbComparison {
+  const AbComparison({
+    required this.winner,
+    required this.scoreA,
+    required this.scoreB,
+    required this.maxScore,
+    required this.notes,
+  });
+
+  final String winner; // 'A' | 'B'
+  final int scoreA;
+  final int scoreB;
+  final int maxScore;
+  final String notes;
+
+  Map<String, dynamic> toJson() => {
+        'winner': winner,
+        'scoreA': scoreA,
+        'scoreB': scoreB,
+        'maxScore': maxScore,
+        'notes': notes,
+      };
+
+  factory AbComparison.fromJson(Map<String, dynamic> json) {
+    return AbComparison(
+      winner: json['winner'] as String? ?? 'A',
+      scoreA: json['scoreA'] as int? ?? 0,
+      scoreB: json['scoreB'] as int? ?? 0,
+      maxScore: json['maxScore'] as int? ?? 0,
+      notes: json['notes'] as String? ?? '',
     );
   }
 }

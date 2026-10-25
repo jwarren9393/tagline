@@ -251,6 +251,149 @@ $lyrics
     );
   }
 
+  /// Continue from existing scene/arc artifacts with a draft-system variant.
+  /// Used for A/B experiments without re-paying for scene extraction.
+  Future<GenerationResult> generateLyricBranch({
+    required SongIdea idea,
+    required String scenesJson,
+    required String arcJson,
+    required String draftSystem,
+    String branchLabel = 'B',
+    PassProgressCallback? onProgress,
+  }) async {
+    var passes = [
+      PipelinePass(
+        id: 'draft_$branchLabel',
+        label: 'Draft $branchLabel',
+        description: 'Variant $branchLabel lyrics draft',
+      ),
+      PipelinePass(
+        id: 'structure_$branchLabel',
+        label: 'Structure $branchLabel',
+        description: 'Normalize tags for variant $branchLabel',
+      ),
+      PipelinePass(
+        id: 'cliche_$branchLabel',
+        label: 'Anti-cliché $branchLabel',
+        description: 'Specificity rewrite for variant $branchLabel',
+      ),
+      PipelinePass(
+        id: 'optimize_$branchLabel',
+        label: 'Optimize $branchLabel',
+        description: 'Suno polish for variant $branchLabel',
+      ),
+    ];
+
+    void update(int index, PipelinePass pass) {
+      passes = List<PipelinePass>.from(passes)..[index] = pass;
+      onProgress?.call(List.unmodifiable(passes));
+    }
+
+    Future<String> runPass({
+      required int index,
+      required String system,
+      required String user,
+      required double temperature,
+      bool stripFences = false,
+    }) async {
+      update(index, passes[index].copyWith(status: PassStatus.running, output: ''));
+      try {
+        final raw = await _client.chat(
+          system: system,
+          user: user,
+          temperature: temperature,
+          onToken: (accumulated) {
+            update(
+              index,
+              passes[index].copyWith(
+                status: PassStatus.running,
+                output: accumulated,
+              ),
+            );
+          },
+        );
+        final text = stripFences ? _stripFences(raw) : raw;
+        update(
+          index,
+          passes[index].copyWith(status: PassStatus.done, output: text),
+        );
+        return text;
+      } catch (e) {
+        update(
+          index,
+          passes[index].copyWith(status: PassStatus.failed, error: '$e'),
+        );
+        rethrow;
+      }
+    }
+
+    final ideaBlock = idea.toPromptBlock();
+    var lyrics = await runPass(
+      index: 0,
+      system: draftSystem,
+      user: '$ideaBlock\n\nSCENE BANK:\n$scenesJson\n\nARC:\n$arcJson',
+      temperature: 0.85,
+      stripFences: true,
+    );
+    lyrics = await runPass(
+      index: 1,
+      system: SystemPrompts.structurePassSystem(),
+      user: 'Normalize structure for Suno:\n\n$lyrics',
+      temperature: 0.3,
+      stripFences: true,
+    );
+    lyrics = await runPass(
+      index: 2,
+      system: SystemPrompts.clicheRewriteSystem(),
+      user: 'Rewrite for specificity:\n\n$lyrics\n\nSCENE BANK:\n$scenesJson',
+      temperature: 0.75,
+      stripFences: true,
+    );
+
+    var title = '';
+    var notes = '';
+    update(3, passes[3].copyWith(status: PassStatus.running, output: ''));
+    try {
+      final optimized = await _client.chat(
+        system: SystemPrompts.sunoOptimizeSystem(),
+        user: 'Optimize for Suno delivery:\n\n$lyrics',
+        temperature: 0.5,
+        onToken: (accumulated) {
+          update(
+            3,
+            passes[3].copyWith(status: PassStatus.running, output: accumulated),
+          );
+        },
+      );
+      try {
+        final map = extractJsonObject(optimized);
+        lyrics = (map['lyrics'] as String?)?.trim().isNotEmpty == true
+            ? map['lyrics'] as String
+            : lyrics;
+        title = (map['title'] as String?)?.trim() ?? '';
+        notes = (map['notes'] as String?)?.trim() ?? '';
+      } catch (_) {
+        lyrics = _stripFences(optimized);
+      }
+      update(3, passes[3].copyWith(status: PassStatus.done, output: lyrics));
+    } catch (e) {
+      update(3, passes[3].copyWith(status: PassStatus.failed, error: '$e'));
+      rethrow;
+    }
+
+    return GenerationResult(
+      lyrics: lyrics.trim(),
+      stylePrompt: '',
+      title: title,
+      notes: notes,
+      passArtifacts: {
+        'scenes': scenesJson,
+        'arc': arcJson,
+        'branch': branchLabel,
+      },
+    );
+  }
+
   Future<String> makeMoreSpecific(
     String lyrics, {
     TokenCallback? onToken,

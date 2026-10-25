@@ -1,10 +1,14 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/generation_result.dart';
 import '../models/generation_session.dart';
 import '../models/song_idea.dart';
+import '../prompts/system_prompts.dart';
+import '../services/export_service.dart';
 import '../services/history_store.dart';
+import '../services/llm_judge.dart';
 import '../services/lyric_pipeline.dart';
 import '../services/nanogpt_client.dart';
 import '../services/prompt_eval.dart';
@@ -23,16 +27,21 @@ class GenerationProvider extends ChangeNotifier {
     SecureSettings settings, {
     HistoryStore? historyStore,
     PromptEval? promptEval,
+    ExportService? exportService,
   })  : _client = NanoGptClient(settings: settings),
         _history = historyStore ?? HistoryStore(),
-        _eval = promptEval ?? const PromptEval() {
+        _eval = promptEval ?? const PromptEval(),
+        _export = exportService ?? const ExportService() {
     _pipeline = LyricPipeline(_client);
+    _judge = LlmJudge(_client);
   }
 
   final NanoGptClient _client;
   late final LyricPipeline _pipeline;
+  late final LlmJudge _judge;
   final HistoryStore _history;
   final PromptEval _eval;
+  final ExportService _export;
   final _uuid = const Uuid();
 
   AppView view = AppView.idea;
@@ -46,16 +55,64 @@ class GenerationProvider extends ChangeNotifier {
   List<ChatTurn> chat = [];
   String? selectedSectionTag;
 
-  /// Active session id when viewing/editing a saved or just-generated song.
   String? currentSessionId;
   List<GenerationSession> history = [];
   bool historyLoaded = false;
+  List<String> sessionTags = [];
+  String sunoFeedback = '';
+  String llmJudgeNotes = '';
+  AbComparison? abComparison;
+
+  /// Bumped when idea is loaded into the intake form so controllers resync.
+  int ideaEditToken = 0;
+
+  String historyQuery = '';
+  String? historyTagFilter;
 
   DateTime _lastStreamNotify = DateTime.fromMillisecondsSinceEpoch(0);
+
+  List<GenerationSession> get filteredHistory {
+    final q = historyQuery.trim().toLowerCase();
+    return history.where((s) {
+      if (historyTagFilter != null &&
+          historyTagFilter!.isNotEmpty &&
+          !s.tags.contains(historyTagFilter)) {
+        return false;
+      }
+      if (q.isEmpty) return true;
+      final hay = [
+        s.displayTitle,
+        s.idea.rawIdea,
+        s.result.lyrics,
+        s.result.stylePrompt,
+        s.sunoFeedback,
+        ...s.tags,
+      ].join(' ').toLowerCase();
+      return hay.contains(q);
+    }).toList();
+  }
+
+  Set<String> get allHistoryTags {
+    final tags = <String>{};
+    for (final s in history) {
+      tags.addAll(s.tags);
+    }
+    return tags;
+  }
 
   Future<void> loadHistory() async {
     history = await _history.loadAll();
     historyLoaded = true;
+    notifyListeners();
+  }
+
+  void setHistoryQuery(String value) {
+    historyQuery = value;
+    notifyListeners();
+  }
+
+  void setHistoryTagFilter(String? tag) {
+    historyTagFilter = tag;
     notifyListeners();
   }
 
@@ -72,7 +129,7 @@ class GenerationProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> generate() async {
+  Future<void> generate({bool createNewSession = true}) async {
     if (!idea.isValid) {
       error = 'Enter a song idea (at least a short sentence).';
       notifyListeners();
@@ -83,8 +140,15 @@ class GenerationProvider extends ChangeNotifier {
     result = null;
     feedback = null;
     evalSummary = null;
+    llmJudgeNotes = '';
+    abComparison = null;
     chat = [];
-    currentSessionId = null;
+    if (createNewSession) {
+      currentSessionId = null;
+      sessionTags = [];
+      // keep sunoFeedback only if regenerating same session — cleared for new
+      sunoFeedback = '';
+    }
     passes = LyricPipeline.initialPasses();
     view = AppView.generating;
     notifyListeners();
@@ -97,7 +161,6 @@ class GenerationProvider extends ChangeNotifier {
           _notifyStreamThrottled();
         },
       );
-      // Final pass state
       notifyListeners();
 
       result = out;
@@ -109,15 +172,159 @@ class GenerationProvider extends ChangeNotifier {
           role: 'assistant',
           text: out.notes.isNotEmpty
               ? 'Ready. ${out.notes}\n\nQuality: ${evalSummary!.label}. '
-                  'Copy into Suno, or ask me to refine.'
+                  'Your original prompt is at the top — edit & regenerate anytime.'
               : 'Ready. Quality: ${evalSummary!.label}. '
-                  'Copy Lyrics and Style into Suno, or ask me to refine.',
+                  'Your original prompt is at the top — edit & regenerate anytime.',
         ),
       ];
       await _persistCurrent(createIfNeeded: true);
     } catch (e) {
       error = e.toString();
       view = AppView.idea;
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  /// Regenerate using the (possibly edited) idea while keeping the session.
+  Future<void> regenerateFromPrompt() => generate(createNewSession: false);
+
+  Future<void> runAbExperiment() async {
+    if (result == null || busy) return;
+    final scenes = result!.passArtifacts['scenes'];
+    final arc = result!.passArtifacts['arc'];
+    if (scenes == null ||
+        scenes.isEmpty ||
+        arc == null ||
+        arc.isEmpty) {
+      error =
+          'A/B needs scene/arc artifacts from a full generate. Run Generate once first.';
+      notifyListeners();
+      return;
+    }
+
+    busy = true;
+    error = null;
+    view = AppView.generating;
+    passes = [
+      const PipelinePass(
+        id: 'ab_info',
+        label: 'A/B setup',
+        description: 'Reusing scene/arc; drafting variants A and B',
+        status: PassStatus.done,
+        output: 'Variant A = standard craft · Variant B = specificity-first',
+      ),
+    ];
+    notifyListeners();
+
+    try {
+      // Variant A
+      final a = await _pipeline.generateLyricBranch(
+        idea: idea,
+        scenesJson: scenes,
+        arcJson: arc,
+        draftSystem: SystemPrompts.draftLyricsSystem(),
+        branchLabel: 'A',
+        onProgress: (p) {
+          passes = [
+            passes.first,
+            ...p,
+          ];
+          _notifyStreamThrottled();
+        },
+      );
+      final evalA = _eval.evaluate(
+        lyrics: a.lyrics,
+        style: result!.stylePrompt,
+        exclude: result!.excludeStyles,
+      );
+
+      // Variant B
+      final b = await _pipeline.generateLyricBranch(
+        idea: idea,
+        scenesJson: scenes,
+        arcJson: arc,
+        draftSystem: SystemPrompts.draftLyricsSystemVariantB(),
+        branchLabel: 'B',
+        onProgress: (p) {
+          passes = [
+            passes.first,
+            ...p,
+          ];
+          _notifyStreamThrottled();
+        },
+      );
+      final evalB = _eval.evaluate(
+        lyrics: b.lyrics,
+        style: result!.stylePrompt,
+        exclude: result!.excludeStyles,
+      );
+
+      final pickB = evalB.score > evalA.score;
+      final winner = pickB ? b : a;
+      final winnerEval = pickB ? evalB : evalA;
+      abComparison = AbComparison(
+        winner: pickB ? 'B' : 'A',
+        scoreA: evalA.score,
+        scoreB: evalB.score,
+        maxScore: evalA.maxScore,
+        notes: pickB
+            ? 'Kept specificity-first variant B.'
+            : 'Kept standard craft variant A.',
+      );
+
+      result = result!.copyWith(
+        lyrics: winner.lyrics,
+        title: winner.title.isNotEmpty ? winner.title : result!.title,
+        notes: winner.notes,
+        passArtifacts: {
+          ...result!.passArtifacts,
+          'ab_a': a.lyrics,
+          'ab_b': b.lyrics,
+        },
+      );
+      evalSummary = winnerEval;
+      feedback = _pipeline.feedbackFor(winner.lyrics);
+      view = AppView.results;
+      chat = [
+        ...chat,
+        ChatTurn(
+          role: 'assistant',
+          text:
+              'A/B done. A ${evalA.score}/${evalA.maxScore} vs '
+              'B ${evalB.score}/${evalB.maxScore} → kept ${abComparison!.winner}. '
+              '${abComparison!.notes}',
+        ),
+      ];
+      await _persistCurrent();
+    } catch (e) {
+      error = e.toString();
+      view = AppView.results;
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> runLlmJudge() async {
+    if (result == null || busy) return;
+    busy = true;
+    error = null;
+    notifyListeners();
+    try {
+      final judged = await _judge.judge(
+        result: result!,
+        localEvalLabel: evalSummary?.label ?? 'n/a',
+      );
+      llmJudgeNotes = judged.toDisplayNotes();
+      chat = [
+        ...chat,
+        ChatTurn(role: 'assistant', text: llmJudgeNotes),
+      ];
+      await _persistCurrent();
+    } catch (e) {
+      error = e.toString();
     } finally {
       busy = false;
       notifyListeners();
@@ -214,6 +421,24 @@ class GenerationProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setSunoFeedback(String value) {
+    sunoFeedback = value;
+    notifyListeners();
+  }
+
+  void setSessionTags(List<String> tags) {
+    sessionTags = tags
+        .map((t) => t.trim())
+        .where((t) => t.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    notifyListeners();
+    if (result != null) {
+      _persistCurrent(createIfNeeded: true);
+    }
+  }
+
   Future<void> saveEdits() async {
     if (result == null) return;
     evalSummary = _eval.evaluateResult(result!);
@@ -228,6 +453,17 @@ class GenerationProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> copyExportPack() async {
+    if (result == null) return;
+    final pack = _export.buildPack(idea: idea, result: result!);
+    await Clipboard.setData(ClipboardData(text: pack));
+  }
+
+  Future<void> shareExportPack() async {
+    if (result == null) return;
+    await _export.sharePack(idea: idea, result: result!);
+  }
+
   Future<void> sendChat(String message) async {
     final msg = message.trim();
     if (msg.isEmpty || busy || result == null) return;
@@ -238,10 +474,18 @@ class GenerationProvider extends ChangeNotifier {
 
     final context = StringBuffer()
       ..writeln('TITLE: ${result!.title}')
+      ..writeln('ORIGINAL PROMPT:\n${idea.rawIdea}')
       ..writeln('LYRICS:\n${result!.lyrics}')
       ..writeln('\nSTYLE:\n${result!.stylePrompt}')
       ..writeln('\nEXCLUDE:\n${result!.excludeStyles}')
       ..writeln('\nQUALITY EVAL: ${evalSummary?.label ?? 'n/a'}');
+    if (sunoFeedback.trim().isNotEmpty) {
+      context.writeln('\nSUNO FEEDBACK (user notes after generating in Suno):');
+      context.writeln(sunoFeedback.trim());
+    }
+    if (llmJudgeNotes.trim().isNotEmpty) {
+      context.writeln('\nLLM JUDGE:\n$llmJudgeNotes');
+    }
 
     try {
       chat = [...chat, const ChatTurn(role: 'assistant', text: '')];
@@ -273,8 +517,26 @@ class GenerationProvider extends ChangeNotifier {
     }
   }
 
-  void backToIdea() {
+  void backToIdea({bool clearResult = false}) {
+    if (clearResult) {
+      result = null;
+      currentSessionId = null;
+    }
     view = AppView.idea;
+    ideaEditToken++;
+    notifyListeners();
+  }
+
+  /// Load current idea into intake for a fresh generation (keeps text).
+  void usePromptAsNewIdea() {
+    result = null;
+    currentSessionId = null;
+    sessionTags = List<String>.from(sessionTags);
+    sunoFeedback = '';
+    llmJudgeNotes = '';
+    abComparison = null;
+    view = AppView.idea;
+    ideaEditToken++;
     notifyListeners();
   }
 
@@ -289,6 +551,10 @@ class GenerationProvider extends ChangeNotifier {
     result = session.result;
     evalSummary = session.evalSummary ?? _eval.evaluateResult(session.result);
     feedback = _pipeline.feedbackFor(session.result.lyrics);
+    sessionTags = List<String>.from(session.tags);
+    sunoFeedback = session.sunoFeedback;
+    llmJudgeNotes = session.llmJudgeNotes;
+    abComparison = session.abComparison;
     chat = [
       ChatTurn(
         role: 'assistant',
@@ -297,6 +563,20 @@ class GenerationProvider extends ChangeNotifier {
       ),
     ];
     view = AppView.results;
+    notifyListeners();
+  }
+
+  /// Open only the prompt into intake (reuse / tweak for a new run).
+  void reusePromptFromSession(GenerationSession session) {
+    idea = session.idea;
+    result = null;
+    currentSessionId = null;
+    sessionTags = List<String>.from(session.tags);
+    sunoFeedback = '';
+    llmJudgeNotes = '';
+    abComparison = null;
+    view = AppView.idea;
+    ideaEditToken++;
     notifyListeners();
   }
 
@@ -330,6 +610,10 @@ class GenerationProvider extends ChangeNotifier {
         idea: idea,
         result: result!,
         evalSummary: evalSummary,
+        tags: sessionTags,
+        sunoFeedback: sunoFeedback,
+        llmJudgeNotes: llmJudgeNotes,
+        abComparison: abComparison,
       );
       history = await _history.upsert(session);
       return;
@@ -349,6 +633,10 @@ class GenerationProvider extends ChangeNotifier {
       result: result!,
       evalSummary: evalSummary,
       pinned: existing?.pinned ?? false,
+      tags: sessionTags,
+      sunoFeedback: sunoFeedback,
+      llmJudgeNotes: llmJudgeNotes,
+      abComparison: abComparison,
     );
     history = await _history.upsert(session);
   }
