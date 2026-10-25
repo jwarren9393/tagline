@@ -459,9 +459,86 @@ class GenerationProvider extends ChangeNotifier {
     await Clipboard.setData(ClipboardData(text: pack));
   }
 
-  Future<void> shareExportPack() async {
-    if (result == null) return;
-    await _export.sharePack(idea: idea, result: result!);
+  /// Share Suno pack. Does not set [busy] so the UI stays responsive.
+  Future<ShareOutcome> shareExportPack({Rect? sharePositionOrigin}) async {
+    if (result == null) {
+      throw const ExportException('Nothing to share yet.');
+    }
+    return _export.sharePack(
+      idea: idea,
+      result: result!,
+      sharePositionOrigin: sharePositionOrigin,
+    );
+  }
+
+  GenerationSession? get currentSessionSnapshot {
+    if (result == null || currentSessionId == null) return null;
+    GenerationSession? existing;
+    for (final s in history) {
+      if (s.id == currentSessionId) {
+        existing = s;
+        break;
+      }
+    }
+    final now = DateTime.now().toUtc();
+    return GenerationSession(
+      id: currentSessionId!,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      idea: idea,
+      result: result!,
+      evalSummary: evalSummary,
+      pinned: existing?.pinned ?? false,
+      tags: sessionTags,
+      sunoFeedback: sunoFeedback,
+      llmJudgeNotes: llmJudgeNotes,
+      abComparison: abComparison,
+    );
+  }
+
+  Future<ShareOutcome> exportCurrentSession({
+    Rect? sharePositionOrigin,
+  }) async {
+    await saveEdits();
+    final session = currentSessionSnapshot;
+    if (session == null) {
+      throw const ExportException('Save a generation before exporting.');
+    }
+    return _export.exportSessionFile(
+      session,
+      sharePositionOrigin: sharePositionOrigin,
+    );
+  }
+
+  Future<ShareOutcome> exportSession(
+    GenerationSession session, {
+    Rect? sharePositionOrigin,
+  }) {
+    return _export.exportSessionFile(
+      session,
+      sharePositionOrigin: sharePositionOrigin,
+    );
+  }
+
+  Future<ShareOutcome> exportFullHistory({Rect? sharePositionOrigin}) async {
+    await loadHistory();
+    if (history.isEmpty) {
+      throw const ExportException('History is empty.');
+    }
+    return _export.exportHistoryFile(
+      history,
+      sharePositionOrigin: sharePositionOrigin,
+    );
+  }
+
+  /// Import session/history file(s) into local history (upsert by id).
+  Future<int> importSessionsFromFile() async {
+    final imported = await _export.pickAndParseImport();
+    if (imported.isEmpty) return 0;
+    history = await _history.upsertAll(imported);
+    historyLoaded = true;
+    notifyListeners();
+    return imported.length;
   }
 
   Future<void> sendChat(String message) async {

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/generation_session.dart';
 import '../providers/generation_provider.dart';
+import '../services/export_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/eval_panel.dart';
 import '../widgets/feedback_panel.dart';
@@ -98,10 +99,73 @@ class _ResultsScreenState extends State<ResultsScreen> {
           icon: const Icon(Icons.copy_all_outlined, size: 18),
           label: const Text('Copy pack'),
         ),
-        OutlinedButton.icon(
-          onPressed: gen.busy ? null : () => gen.shareExportPack(),
-          icon: const Icon(Icons.ios_share, size: 18),
-          label: const Text('Share'),
+        Builder(
+          builder: (btnContext) => OutlinedButton.icon(
+            onPressed: gen.busy
+                ? null
+                : () async {
+                    try {
+                      final outcome = await gen.shareExportPack(
+                        sharePositionOrigin:
+                            shareOriginFromContext(btnContext),
+                      );
+                      if (!btnContext.mounted || outcome.isCancelled) return;
+                      ScaffoldMessenger.of(btnContext).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            outcome.kind == ShareOutcomeKind.saved
+                                ? 'Saved pack to ${outcome.path}'
+                                : 'Share sheet opened',
+                          ),
+                        ),
+                      );
+                    } catch (e) {
+                      if (!btnContext.mounted) return;
+                      ScaffoldMessenger.of(btnContext).showSnackBar(
+                        SnackBar(
+                          content: Text('$e'),
+                          backgroundColor: AppColors.danger,
+                        ),
+                      );
+                    }
+                  },
+            icon: const Icon(Icons.ios_share, size: 18),
+            label: const Text('Share'),
+          ),
+        ),
+        Builder(
+          builder: (btnContext) => OutlinedButton.icon(
+            onPressed: gen.busy
+                ? null
+                : () async {
+                    try {
+                      final outcome = await gen.exportCurrentSession(
+                        sharePositionOrigin:
+                            shareOriginFromContext(btnContext),
+                      );
+                      if (!btnContext.mounted || outcome.isCancelled) return;
+                      ScaffoldMessenger.of(btnContext).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            outcome.kind == ShareOutcomeKind.saved
+                                ? 'Session exported to ${outcome.path}'
+                                : 'Session file ready to send',
+                          ),
+                        ),
+                      );
+                    } catch (e) {
+                      if (!btnContext.mounted) return;
+                      ScaffoldMessenger.of(btnContext).showSnackBar(
+                        SnackBar(
+                          content: Text('$e'),
+                          backgroundColor: AppColors.danger,
+                        ),
+                      );
+                    }
+                  },
+            icon: const Icon(Icons.upload_file_outlined, size: 18),
+            label: const Text('Export session'),
+          ),
         ),
         OutlinedButton.icon(
           onPressed: gen.busy ? null : () => gen.runLlmJudge(),

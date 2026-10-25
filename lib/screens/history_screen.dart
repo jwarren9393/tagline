@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/generation_session.dart';
 import '../providers/generation_provider.dart';
+import '../services/export_service.dart';
 import '../theme/app_theme.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -36,7 +37,69 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final tags = gen.allHistoryTags.toList()..sort();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('History')),
+      appBar: AppBar(
+        title: const Text('History'),
+        actions: [
+          IconButton(
+            tooltip: 'Import session file',
+            onPressed: () async {
+              try {
+                final count = await gen.importSessionsFromFile();
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      count == 0
+                          ? 'Import cancelled'
+                          : 'Imported $count session${count == 1 ? '' : 's'}',
+                    ),
+                  ),
+                );
+              } catch (e) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('$e'),
+                    backgroundColor: AppColors.danger,
+                  ),
+                );
+              }
+            },
+            icon: const Icon(Icons.file_download_outlined),
+          ),
+          IconButton(
+            tooltip: 'Export all history',
+            onPressed: gen.history.isEmpty
+                ? null
+                : () async {
+                    try {
+                      final outcome = await gen.exportFullHistory(
+                        sharePositionOrigin: shareOriginFromContext(context),
+                      );
+                      if (!context.mounted || outcome.isCancelled) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            outcome.kind == ShareOutcomeKind.saved
+                                ? 'History saved to ${outcome.path}'
+                                : 'History backup ready to send',
+                          ),
+                        ),
+                      );
+                    } catch (e) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('$e'),
+                          backgroundColor: AppColors.danger,
+                        ),
+                      );
+                    }
+                  },
+            icon: const Icon(Icons.file_upload_outlined),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: !gen.historyLoaded
             ? const Center(child: CircularProgressIndicator())
@@ -131,6 +194,39 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                       gen.reusePromptFromSession(session);
                                       Navigator.of(context).pop();
                                     },
+                                    onExport: () async {
+                                      try {
+                                        final outcome = await gen.exportSession(
+                                          session,
+                                          sharePositionOrigin:
+                                              shareOriginFromContext(context),
+                                        );
+                                        if (!context.mounted ||
+                                            outcome.isCancelled) {
+                                          return;
+                                        }
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              outcome.kind ==
+                                                      ShareOutcomeKind.saved
+                                                  ? 'Exported to ${outcome.path}'
+                                                  : 'Session file ready to send',
+                                            ),
+                                          ),
+                                        );
+                                      } catch (e) {
+                                        if (!context.mounted) return;
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text('$e'),
+                                            backgroundColor: AppColors.danger,
+                                          ),
+                                        );
+                                      }
+                                    },
                                     onPin: () => gen.togglePin(session),
                                     onDelete: () async {
                                       final ok = await showDialog<bool>(
@@ -175,6 +271,7 @@ class _HistoryTile extends StatelessWidget {
     required this.session,
     required this.onOpen,
     required this.onReusePrompt,
+    required this.onExport,
     required this.onPin,
     required this.onDelete,
   });
@@ -182,6 +279,7 @@ class _HistoryTile extends StatelessWidget {
   final GenerationSession session;
   final VoidCallback onOpen;
   final VoidCallback onReusePrompt;
+  final VoidCallback onExport;
   final VoidCallback onPin;
   final VoidCallback onDelete;
 
@@ -282,6 +380,11 @@ class _HistoryTile extends StatelessWidget {
                     tooltip: 'Reuse prompt',
                     onPressed: onReusePrompt,
                     icon: const Icon(Icons.content_paste_go, size: 18),
+                  ),
+                  IconButton(
+                    tooltip: 'Export session file',
+                    onPressed: onExport,
+                    icon: const Icon(Icons.upload_file_outlined, size: 18),
                   ),
                   IconButton(
                     tooltip: session.pinned ? 'Unpin' : 'Pin',

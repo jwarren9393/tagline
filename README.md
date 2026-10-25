@@ -84,8 +84,9 @@ flutter build apk
 4. Copy **Lyrics** into Suno’s Lyrics field and **Style** / **Exclude Styles** into the matching fields.
 5. On results, your **prompt** stays editable — regenerate from it or “Edit as new idea.”
 6. Check **Prompt eval**; optionally run **LLM judge** or **A/B test**.
-7. **Copy pack** / **Share** into Suno; afterward fill **Suno feedback** so Refine can target real delivery issues.
-8. History supports search, tags, and **reuse prompt**.
+7. **Copy pack** / **Share** into Suno (desktop saves a `.txt`; Android opens the share sheet with the pack file). Afterward fill **Suno feedback** so Refine can target real delivery issues.
+8. **Export session** / History **Import** / **Export all** move sessions as `.tagline.json` between desktop and Android (upsert by id).
+9. History supports search, tags, and **reuse prompt**.
 
 ## Project docs
 

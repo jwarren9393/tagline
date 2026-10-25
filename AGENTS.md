@@ -52,6 +52,8 @@ lib/
 | Local prompt eval + LLM judge | Done |
 | A/B lyric branch experiment (A standard / B specificity) | Done |
 | Anima-style API & connection settings (catalog/credits/favorites) | Done |
+| Portable session import/export (`.tagline.json`) | Done |
+| Share Suno pack (file-only; desktop save dialog) | Done |
 | Offline mock generation | Not started |
 | iOS / macOS / web | Out of scope |
 
@@ -70,6 +72,8 @@ lib/
 - A/B reuses scene+arc artifacts; only re-runs draft→optimize for variants A/B; keeps higher local eval.
 - Refine chat includes original prompt + Suno feedback + LLM judge notes when present.
 - API settings follow Anima NanoGPT UX (not theme): live `models?detailed=true`, credits sheet (wallet + subscription usage), filters, browse sheet, favorites, separate key vs model saves. Pay-as-you-go base = `https://nano-gpt.com/api/v1`. No image-model section (Tagline does not generate images).
+- Share must not pass `text` and `files` together to `share_plus` (Android freeze). Desktop uses `FilePicker.saveFile` instead of a share sheet.
+- Session transfer files use envelope `{format:"tagline.session"|"tagline.history", version, session(s)}`; import upserts by id so the same file restores/updates across devices.
 
 ## Known issues / TODOs
 

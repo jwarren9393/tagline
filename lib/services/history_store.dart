@@ -76,6 +76,23 @@ class HistoryStore {
     return loadAll();
   }
 
+  /// Upsert many sessions (e.g. device-to-device import). Same ids replace.
+  Future<List<GenerationSession>> upsertAll(
+    Iterable<GenerationSession> sessions,
+  ) async {
+    final all = await loadAll();
+    for (final session in sessions) {
+      final idx = all.indexWhere((s) => s.id == session.id);
+      if (idx >= 0) {
+        all[idx] = session;
+      } else {
+        all.insert(0, session);
+      }
+    }
+    await _writeAll(all);
+    return loadAll();
+  }
+
   Future<List<GenerationSession>> delete(String id) async {
     final all = await loadAll();
     all.removeWhere((s) => s.id == id);

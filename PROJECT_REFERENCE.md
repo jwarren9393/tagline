@@ -253,7 +253,9 @@ Prefer unit tests for pipeline helpers (`syllable_analyzer_test.dart`, idea prom
 - Store: `HistoryStore` → `tagline_history.json` in application documents directory (`path_provider`)
 - Cap: 200 sessions (drops oldest unpinned first)
 - Auto-upsert after successful generate and after tools that change lyrics; manual **Save** on results screen
-- UI: `HistoryScreen` (open / pin / delete)
+- UI: `HistoryScreen` (open / pin / delete / import / export)
+- Portable transfer: `ExportService` writes `.tagline.json` envelopes (`tagline.session` / `tagline.history`); import upserts by id via `HistoryStore.upsertAll`
+- Suno pack share: file-only on mobile (`share_plus` freezes if `text` + `files` are both set); desktop uses `FilePicker.saveFile`
 
 ## 13. Streaming
 
@@ -340,7 +342,7 @@ Settings screen rebuilt to match Anima’s NanoGPT connection UX (Tagline theme)
 As of the Anima-style API settings milestone:
 - SafeArea / scroll-from-field fixes
 - Prompt visibility + regenerate / new-idea / history reuse
-- Export/share, Suno feedback, history search+tags, LLM judge, A/B
+- Export/share (Suno pack + portable `.tagline.json` session/history), Suno feedback, history search+tags, LLM judge, A/B
 - Live NanoGPT catalog / credits / favorites settings
 - Prior: streaming, history persistence, local eval, multi-pass, genre templates
 - Dependencies: `share_plus`, `path_provider`, `path`, …
