@@ -1,4 +1,5 @@
 import '../data/genre_templates.dart';
+import 'inspiration_dna.dart';
 
 /// User input for a generation session.
 class SongIdea {
@@ -9,6 +10,10 @@ class SongIdea {
     this.constraints = '',
     this.referenceVibes = '',
     this.titleHint = '',
+    this.inspirationArtist = '',
+    this.inspirationSong = '',
+    this.inspirationLyricsExcerpt = '',
+    this.inspirationDna,
   });
 
   final String rawIdea;
@@ -18,7 +23,28 @@ class SongIdea {
   final String referenceVibes;
   final String titleHint;
 
+  /// Optional inspiration sources (artist / song / user-pasted excerpt).
+  final String inspirationArtist;
+  final String inspirationSong;
+  final String inspirationLyricsExcerpt;
+  final InspirationDna? inspirationDna;
+
   GenreTemplate? get genre => genreId == null ? null : genreById(genreId!);
+
+  bool get hasInspirationSource =>
+      inspirationArtist.trim().isNotEmpty ||
+      inspirationSong.trim().isNotEmpty ||
+      inspirationLyricsExcerpt.trim().isNotEmpty;
+
+  String get inspirationFingerprint => InspirationDna.fingerprint(
+        artist: inspirationArtist,
+        song: inspirationSong,
+        lyricsExcerpt: inspirationLyricsExcerpt,
+      );
+
+  bool get inspirationDnaIsFresh =>
+      inspirationDna != null &&
+      inspirationDna!.sourceFingerprint == inspirationFingerprint;
 
   SongIdea copyWith({
     String? rawIdea,
@@ -27,7 +53,12 @@ class SongIdea {
     String? constraints,
     String? referenceVibes,
     String? titleHint,
+    String? inspirationArtist,
+    String? inspirationSong,
+    String? inspirationLyricsExcerpt,
+    InspirationDna? inspirationDna,
     bool clearGenre = false,
+    bool clearInspirationDna = false,
   }) {
     return SongIdea(
       rawIdea: rawIdea ?? this.rawIdea,
@@ -36,6 +67,13 @@ class SongIdea {
       constraints: constraints ?? this.constraints,
       referenceVibes: referenceVibes ?? this.referenceVibes,
       titleHint: titleHint ?? this.titleHint,
+      inspirationArtist: inspirationArtist ?? this.inspirationArtist,
+      inspirationSong: inspirationSong ?? this.inspirationSong,
+      inspirationLyricsExcerpt:
+          inspirationLyricsExcerpt ?? this.inspirationLyricsExcerpt,
+      inspirationDna: clearInspirationDna
+          ? null
+          : (inspirationDna ?? this.inspirationDna),
     );
   }
 
@@ -65,6 +103,19 @@ class SongIdea {
     if (constraints.trim().isNotEmpty) {
       buf.writeln('\nCONSTRAINTS: ${constraints.trim()}');
     }
+    if (inspirationDna != null && !inspirationDna!.isEmpty) {
+      buf.writeln();
+      buf.writeln(inspirationDna!.toPromptBlock());
+    } else if (hasInspirationSource) {
+      buf.writeln('\nINSPIRATION SOURCES (DNA not extracted yet — treat as vibe only):');
+      if (inspirationArtist.trim().isNotEmpty) {
+        buf.writeln('Artist: ${inspirationArtist.trim()}');
+      }
+      if (inspirationSong.trim().isNotEmpty) {
+        buf.writeln('Song: ${inspirationSong.trim()}');
+      }
+      buf.writeln('Do not copy lyrics or distinctive phrases.');
+    }
     return buf.toString();
   }
 
@@ -77,9 +128,18 @@ class SongIdea {
         'constraints': constraints,
         'referenceVibes': referenceVibes,
         'titleHint': titleHint,
+        'inspirationArtist': inspirationArtist,
+        'inspirationSong': inspirationSong,
+        'inspirationLyricsExcerpt': inspirationLyricsExcerpt,
+        if (inspirationDna != null) 'inspirationDna': inspirationDna!.toJson(),
       };
 
   factory SongIdea.fromJson(Map<String, dynamic> json) {
+    InspirationDna? dna;
+    final rawDna = json['inspirationDna'];
+    if (rawDna is Map) {
+      dna = InspirationDna.fromJson(Map<String, dynamic>.from(rawDna));
+    }
     return SongIdea(
       rawIdea: json['rawIdea'] as String? ?? '',
       genreId: json['genreId'] as String?,
@@ -90,6 +150,11 @@ class SongIdea {
       constraints: json['constraints'] as String? ?? '',
       referenceVibes: json['referenceVibes'] as String? ?? '',
       titleHint: json['titleHint'] as String? ?? '',
+      inspirationArtist: json['inspirationArtist'] as String? ?? '',
+      inspirationSong: json['inspirationSong'] as String? ?? '',
+      inspirationLyricsExcerpt:
+          json['inspirationLyricsExcerpt'] as String? ?? '',
+      inspirationDna: dna,
     );
   }
 }

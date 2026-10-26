@@ -16,6 +16,8 @@ class SecureSettings {
   static const _baseUrlKey = 'nanogpt_base_url';
   static const _useSubscriptionKey = 'nanogpt_use_subscription';
   static const _favoritesKey = 'nanogpt_favorite_models';
+  static const _favoriteGenresKey = 'tagline_favorite_genres';
+  static const _favoriteMoodsKey = 'tagline_favorite_moods';
 
   static const defaultModel = 'openai/gpt-4o';
 
@@ -101,6 +103,44 @@ class SecureSettings {
         ? current.where((f) => f.id != entry.id).toList()
         : [entry, ...current.where((f) => f.id != entry.id)];
     await setFavorites(next);
+    return next;
+  }
+
+  Future<List<String>> getFavoriteGenreIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList(_favoriteGenresKey) ?? const [];
+  }
+
+  Future<void> setFavoriteGenreIds(List<String> ids) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_favoriteGenresKey, ids);
+  }
+
+  Future<List<String>> toggleFavoriteGenreId(String id) async {
+    final current = await getFavoriteGenreIds();
+    final next = current.contains(id)
+        ? current.where((e) => e != id).toList()
+        : [...current, id];
+    await setFavoriteGenreIds(next);
+    return next;
+  }
+
+  Future<List<String>> getFavoriteMoods() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList(_favoriteMoodsKey) ?? const [];
+  }
+
+  Future<void> setFavoriteMoods(List<String> moods) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_favoriteMoodsKey, moods);
+  }
+
+  Future<List<String>> toggleFavoriteMood(String mood) async {
+    final current = await getFavoriteMoods();
+    final next = current.contains(mood)
+        ? current.where((e) => e != mood).toList()
+        : [...current, mood];
+    await setFavoriteMoods(next);
     return next;
   }
 }

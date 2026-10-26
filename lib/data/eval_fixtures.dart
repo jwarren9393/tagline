@@ -2,46 +2,47 @@
 /// Not copyrighted songs — synthetic examples for regression tests.
 library;
 
+/// Voice + rhyme + even meter: a song, not free-verse talk or prop pastiche.
 const kGoodLyricsFixture = '''
 [Intro]
 
 [Verse 1]
-Your mug's still in the sink from Thursday
-Lipstick print dried on the rim
-I leave the porch light on way too late
-Like you might still pull in
+You left your jacket on my chair
+I almost hung it up right there
+Then I pictured that cold drive home
+And left it for you on its own
 
 [Pre-Chorus]
-Truck coughs once in the driveway cold
-I laugh like that means I'm fine
+Don't make this into something large
+I'm not here to ask or charge
 
 [Chorus]
-Stay a little longer, oh
-Stay a little longer, oh
-Keys on the table, coat on the chair
-Stay a little longer, oh
+Don't say it out loud yet
+Don't say it out loud yet
+Leave the light the way it is
+Don't say it out loud yet
 
 [Verse 2]
-Half a grocery list stuck to the fridge
-Milk and oranges, your handwriting
-The kettle clicks and I don't pour it
-Just stand there listening
+I typed "you home?" about three times
+Deleted twice, then crossed the line
+You hearted it and that was all
+Guess that's just us after the fall
 
 [Chorus]
-Stay a little longer, oh
-Stay a little longer, oh
-Keys on the table, coat on the chair
-Stay a little longer, oh
+Don't say it out loud yet
+Don't say it out loud yet
+Leave the light the way it is
+Don't say it out loud yet
 
 [Bridge]
-I fold your laundry wrong on purpose
-So you'll complain when you get home
+If you walk in now I'll act surprised
+Like I wasn't waiting with these tired eyes
 
 [Chorus]
-Stay a little longer, oh
-Stay a little longer, oh
-Keys on the table, coat on the chair
-Stay a little longer, oh
+Don't say it out loud yet
+Don't say it out loud yet
+Leave the light the way it is
+Don't say it out loud yet
 
 [Outro]
 ''';
@@ -64,6 +65,8 @@ I will always love you differently somehow with passion burning like a fire in m
 
 [Verse 2]
 Drowning in tears like rain at midnight hour with whispers of secrets written in the stars
+Cold linoleum, bare feet at one a.m. with a trembling hand in the mirror fog
+Cold tile soaks right through my socks by the bathroom fan
 ''';
 
 const kBadStyleFixture =

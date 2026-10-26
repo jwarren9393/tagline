@@ -85,7 +85,8 @@ lib/
 | `generating` | `GeneratingScreen` | Per-pass progress list |
 | `results` | `ResultsScreen` | Lyrics / Style / Exclude + tools + refine chat |
 
-Settings is a pushed route (`SettingsScreen`), not an `AppView`.
+Settings is a pushed hub (`SettingsHubScreen` → `ApiSettingsScreen`), not an `AppView`.
+Inspiration DNA lives on idea intake (artist / song / optional paste → abstract formula via MusicBrainz tags + Genius ephemeral lyrics analysis + Deezer BPM/duration/gain + NanoGPT). Genius lyrics are analysis-only and must not appear in Style/Lyrics outputs. Measured Deezer audio seeds Style (BPM may be half-timed for ballads).
 
 ### 3.4 Data flow
 
@@ -144,15 +145,15 @@ Implemented in `lib/services/lyric_pipeline.dart`. Passes (in order):
 
 | # | id | Purpose | System prompt factory |
 |---|-----|---------|------------------------|
-| 1 | `scenes` | Extract/invent concrete sensory bank + objects | `sceneExtractionSystem` → JSON |
+| 0 | `inspiration` | Optional abstract DNA from artist/song/paste | `inspirationDnaSystem` + MusicBrainz + Genius + Deezer |
+| 1 | `scenes` | Voice brief + tiny optional detail bank | `sceneExtractionSystem` → JSON |
 | 2 | `arc` | Emotional/story arc + section jobs + hook | `arcOutlineSystem` → JSON |
-| 3 | `draft` | Conversational lyrics + tags | `draftLyricsSystem` → lyrics |
-| 4 | `structure` | Normalize Suno tags, chorus identity | `structurePassSystem` → lyrics |
-| 5 | `cliche` | Anti-cliché / specificity rewrite | `clicheRewriteSystem` → lyrics |
-| 6 | `optimize` | Final Suno delivery polish | `sunoOptimizeSystem` → JSON `{title,lyrics,notes}` |
-| 7 | `style` | Style + Exclude Styles | `stylePromptSystem` → JSON `{style,exclude_styles}` |
+| 3 | `draft` | Singable lyrics + rhyme + tags | `draftLyricsSystem` → lyrics |
+| 4 | `cliche` | Anti-slop / voice + rhyme rewrite | `clicheRewriteSystem` → lyrics |
+| 5 | `optimize` | Final polish + structure/chorus + title | `sunoOptimizeSystem` → JSON `{title,lyrics,notes}` |
+| 6 | `style` | Style + Exclude Styles | `stylePromptSystem` → JSON `{style,exclude_styles}` |
 
-Temperatures are tuned per pass (creative early, stricter late). Style failure is non-fatal if a genre `styleSeed` exists.
+No separate structure LLM pass (draft + optimize own tags/chorus). Temperatures tuned per pass. Style failure is non-fatal if a genre `styleSeed` exists.
 
 Progress is reported via `PassProgressCallback` → UI `PassProgressList`.
 
@@ -282,9 +283,10 @@ flutter test test/prompt_eval_test.dart
 ## 15. How to extend (guidance for future AIs)
 
 ### Improving lyric quality
-1. Edit `lib/prompts/system_prompts.dart` few-shots and rules first.
-2. Expand `cliche_families.dart` only with high-frequency offenders.
+1. Edit `lib/prompts/system_prompts.dart` few-shots and rules first — optimize for **human voice + section turns**, not prop dumps.
+2. Expand `cliche_families.dart` for both classic clichés and AI pastiche (kitchen props, recovery-diary cosplay, metaphor salad).
 3. Keep `prompt_eval_test` green; tighten checks before adding LLM-as-judge.
+4. Model picks: pay-as-you-go Claude Opus 5.5 / Fable 5.1 / Sonnet 5.5; subscription try GLM 5.3, DeepSeek V4 Pro / V3.1, Llama 4 Maverick.
 
 ### Natural next features
 - Export lyrics/style as `.txt` / share sheet

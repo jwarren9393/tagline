@@ -17,6 +17,8 @@ class SettingsProvider extends ChangeNotifier {
   String model = SecureSettings.defaultModel;
   bool useSubscription = true;
   List<FavoriteModel> favorites = [];
+  List<String> favoriteGenreIds = [];
+  List<String> favoriteMoods = [];
 
   List<NanoGptModelInfo> catalog = [];
   bool catalogLoading = false;
@@ -60,18 +62,34 @@ class SettingsProvider extends ChangeNotifier {
 
   bool isFavorite(String id) => favorites.any((f) => f.id == id);
 
+  bool isFavoriteGenre(String id) => favoriteGenreIds.contains(id);
+
+  bool isFavoriteMood(String mood) => favoriteMoods.contains(mood);
+
   Future<void> load() async {
     final key = await _settings.getApiKey();
     hasApiKey = key != null && key.isNotEmpty;
     model = await _settings.getModel();
     useSubscription = await _settings.getUseSubscription();
     favorites = await _settings.getFavorites();
+    favoriteGenreIds = await _settings.getFavoriteGenreIds();
+    favoriteMoods = await _settings.getFavoriteMoods();
     loaded = true;
     notifyListeners();
     if (hasApiKey) {
       // Fire-and-forget catalog warm
       refreshCatalog();
     }
+  }
+
+  Future<void> toggleFavoriteGenre(String id) async {
+    favoriteGenreIds = await _settings.toggleFavoriteGenreId(id);
+    notifyListeners();
+  }
+
+  Future<void> toggleFavoriteMood(String mood) async {
+    favoriteMoods = await _settings.toggleFavoriteMood(mood);
+    notifyListeners();
   }
 
   Future<void> saveApiKey(String key) async {

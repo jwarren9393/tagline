@@ -14,8 +14,9 @@ Songwriters and producers who use Suno and want lyrics that actually sing: concr
 - **Live streaming** of each pass into the progress UI (SSE via NanoGPT)
 - **Original prompt on results** — view/edit, regenerate from it, or start a new idea; reuse from History
 - **Suno-accurate formatting**: section tags on their own lines; Style = sound only; negatives in Exclude Styles
-- **Anti-cliché craft** + local **prompt eval** + optional **LLM judge**
-- **A/B test** lyric variants (standard vs specificity-first); keeps the higher eval score
+- **Anti-slop craft** (voice + rhyme + substance) + local **prompt eval** + optional **LLM judge**
+- Settings chips for lyric-friendly NanoGPT models
+- **A/B test** lyric variants (standard vs voice/substance); keeps the higher eval score
 - **Suno feedback loop** — note what rushed/worked after generating in Suno; feeds Refine
 - **Export** — copy full pack or share `.txt` (Style + Exclude + Lyrics + original prompt)
 - **History** — auto-save, pin, search, tags, reopen, reuse prompt
@@ -79,7 +80,9 @@ flutter build apk
 ## Basic usage
 
 1. Describe the song in plain language. Specific objects and scenes help.
-2. Optionally load a **genre template** and select moods / constraints.
+2. Optionally load a **genre template**, moods / constraints, and **Inspiration DNA**
+   (artist / song → MusicBrainz + Genius + Deezer BPM/duration, optional paste →
+   abstract formula, never a copy).
 3. Wait for the multi-pass pipeline (progress is shown per pass).
 4. Copy **Lyrics** into Suno’s Lyrics field and **Style** / **Exclude Styles** into the matching fields.
 5. On results, your **prompt** stays editable — regenerate from it or “Edit as new idea.”

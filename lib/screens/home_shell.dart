@@ -8,7 +8,7 @@ import 'generating_screen.dart';
 import 'history_screen.dart';
 import 'idea_intake_screen.dart';
 import 'results_screen.dart';
-import 'settings_screen.dart';
+import 'settings_hub_screen.dart';
 
 class HomeShell extends StatelessWidget {
   const HomeShell({super.key});
@@ -69,7 +69,7 @@ class HomeShell extends StatelessWidget {
               tooltip: 'Settings',
               onPressed: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                  MaterialPageRoute(builder: (_) => const SettingsHubScreen()),
                 );
               },
               icon: const Icon(Icons.settings_outlined),

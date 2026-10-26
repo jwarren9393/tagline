@@ -2,12 +2,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 
+import 'dart:convert';
+
 import '../models/generation_result.dart';
 import '../models/generation_session.dart';
+import '../models/inspiration_dna.dart';
 import '../models/song_idea.dart';
 import '../prompts/system_prompts.dart';
 import '../services/export_service.dart';
 import '../services/history_store.dart';
+import '../services/inspiration_dna_service.dart';
 import '../services/llm_judge.dart';
 import '../services/lyric_pipeline.dart';
 import '../services/nanogpt_client.dart';
@@ -117,8 +121,45 @@ class GenerationProvider extends ChangeNotifier {
   }
 
   void updateIdea(SongIdea next) {
-    idea = next;
+    // Drop stale DNA when inspiration sources change.
+    if (next.hasInspirationSource &&
+        next.inspirationDna != null &&
+        next.inspirationDna!.sourceFingerprint != next.inspirationFingerprint) {
+      idea = next.copyWith(clearInspirationDna: true);
+    } else if (!next.hasInspirationSource && next.inspirationDna != null) {
+      idea = next.copyWith(clearInspirationDna: true);
+    } else {
+      idea = next;
+    }
     notifyListeners();
+  }
+
+  /// Extract abstract inspiration DNA without running the full lyric pipeline.
+  Future<void> extractInspirationDna() async {
+    if (!idea.hasInspirationSource) {
+      error =
+          'Add an artist, song title, and/or a short lyrics excerpt for inspiration.';
+      notifyListeners();
+      return;
+    }
+    busy = true;
+    error = null;
+    notifyListeners();
+    try {
+      final dna = await _pipeline.extractInspirationDna(
+        artist: idea.inspirationArtist,
+        song: idea.inspirationSong,
+        lyricsExcerpt: idea.inspirationLyricsExcerpt,
+      );
+      idea = idea.copyWith(inspirationDna: dna);
+    } on InspirationDnaException catch (e) {
+      error = e.message;
+    } catch (e) {
+      error = e.toString();
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
   }
 
   void _notifyStreamThrottled() {
@@ -149,7 +190,9 @@ class GenerationProvider extends ChangeNotifier {
       // keep sunoFeedback only if regenerating same session — cleared for new
       sunoFeedback = '';
     }
-    passes = LyricPipeline.initialPasses();
+    passes = LyricPipeline.initialPasses(
+      withInspiration: idea.hasInspirationSource,
+    );
     view = AppView.generating;
     notifyListeners();
 
@@ -162,6 +205,18 @@ class GenerationProvider extends ChangeNotifier {
         },
       );
       notifyListeners();
+
+      final inspRaw = out.passArtifacts['inspiration'];
+      if (inspRaw != null && inspRaw.trim().isNotEmpty) {
+        try {
+          final dna = InspirationDna.fromJson(
+            Map<String, dynamic>.from(jsonDecode(inspRaw) as Map),
+          );
+          idea = idea.copyWith(inspirationDna: dna);
+        } catch (_) {
+          // Keep prior idea DNA if parse fails.
+        }
+      }
 
       result = out;
       feedback = _pipeline.feedbackFor(out.lyrics);
@@ -213,7 +268,7 @@ class GenerationProvider extends ChangeNotifier {
         label: 'A/B setup',
         description: 'Reusing scene/arc; drafting variants A and B',
         status: PassStatus.done,
-        output: 'Variant A = standard craft · Variant B = specificity-first',
+        output: 'Variant A = standard craft · Variant B = voice + section turns',
       ),
     ];
     notifyListeners();
@@ -270,7 +325,7 @@ class GenerationProvider extends ChangeNotifier {
         scoreB: evalB.score,
         maxScore: evalA.maxScore,
         notes: pickB
-            ? 'Kept specificity-first variant B.'
+            ? 'Kept voice/substance variant B.'
             : 'Kept standard craft variant A.',
       );
 

@@ -1,7 +1,9 @@
 import '../models/generation_result.dart';
+import '../models/inspiration_dna.dart';
 import '../models/song_idea.dart';
 import '../prompts/system_prompts.dart';
 import 'cliche_detector.dart';
+import 'inspiration_dna_service.dart';
 import 'nanogpt_client.dart';
 import 'syllable_analyzer.dart';
 
@@ -9,15 +11,22 @@ typedef PassProgressCallback = void Function(List<PipelinePass> passes);
 
 /// Multi-pass lyric + style generation for Suno.
 class LyricPipeline {
-  LyricPipeline(this._client);
+  LyricPipeline(this._client) : _inspiration = InspirationDnaService(_client);
 
   final NanoGptClient _client;
+  final InspirationDnaService _inspiration;
 
-  static List<PipelinePass> initialPasses() => [
+  static List<PipelinePass> initialPasses({bool withInspiration = false}) => [
+        if (withInspiration)
+          const PipelinePass(
+            id: 'inspiration',
+            label: 'Inspiration DNA',
+            description: 'Abstract sonic + craft formula (never a copy)',
+          ),
         const PipelinePass(
           id: 'scenes',
-          label: 'Scene & senses',
-          description: 'Extract concrete scenes, objects, and sensory details',
+          label: 'Voice & brief',
+          description: 'Extract voice, conflict, and a few optional details',
         ),
         const PipelinePass(
           id: 'arc',
@@ -27,22 +36,17 @@ class LyricPipeline {
         const PipelinePass(
           id: 'draft',
           label: 'Draft lyrics',
-          description: 'Write conversational lyrics with structure tags',
-        ),
-        const PipelinePass(
-          id: 'structure',
-          label: 'Structure tags',
-          description: 'Normalize Suno section tags and chorus repeats',
+          description: 'Write singable lyrics with rhyme + structure tags',
         ),
         const PipelinePass(
           id: 'cliche',
-          label: 'Anti-cliché pass',
-          description: 'Rewrite abstractions into specific imagery',
+          label: 'Anti-slop pass',
+          description: 'Kill pastiche; keep voice, rhyme, and substance',
         ),
         const PipelinePass(
           id: 'optimize',
           label: 'Suno optimize',
-          description: 'Final syllable and delivery polish',
+          description: 'Final meter, rhyme, and delivery polish',
         ),
         const PipelinePass(
           id: 'style',
@@ -55,7 +59,8 @@ class LyricPipeline {
     required SongIdea idea,
     PassProgressCallback? onProgress,
   }) async {
-    var passes = initialPasses();
+    final withInspiration = idea.hasInspirationSource;
+    var passes = initialPasses(withInspiration: withInspiration);
     void update(int index, PipelinePass pass) {
       passes = List<PipelinePass>.from(passes)..[index] = pass;
       onProgress?.call(List.unmodifiable(passes));
@@ -100,55 +105,116 @@ class LyricPipeline {
     }
 
     final artifacts = <String, String>{};
-    final ideaBlock = idea.toPromptBlock();
-    final genreSeed = idea.genre?.styleSeed ?? '';
-    final excludeSeed = idea.genre?.excludeSeed ?? '';
+    var workingIdea = idea;
+    var index = 0;
+
+    if (withInspiration) {
+      update(index, passes[index].copyWith(status: PassStatus.running, output: ''));
+      try {
+        InspirationDna dna;
+        if (idea.inspirationDnaIsFresh) {
+          dna = idea.inspirationDna!;
+          update(
+            index,
+            passes[index].copyWith(
+              status: PassStatus.done,
+              output: dna.summary.isEmpty ? dna.encodePretty() : dna.summary,
+            ),
+          );
+        } else {
+          dna = await _inspiration.extract(
+            artist: idea.inspirationArtist,
+            song: idea.inspirationSong,
+            lyricsExcerpt: idea.inspirationLyricsExcerpt,
+            onToken: (accumulated) {
+              update(
+                index,
+                passes[index].copyWith(
+                  status: PassStatus.running,
+                  output: accumulated,
+                ),
+              );
+            },
+          );
+          update(
+            index,
+            passes[index].copyWith(
+              status: PassStatus.done,
+              output: dna.summary.isEmpty ? dna.encodePretty() : dna.summary,
+            ),
+          );
+        }
+        workingIdea = idea.copyWith(inspirationDna: dna);
+        artifacts['inspiration'] = dna.encodePretty();
+      } catch (e) {
+        update(
+          index,
+          passes[index].copyWith(status: PassStatus.failed, error: '$e'),
+        );
+        rethrow;
+      }
+      index++;
+    }
+
+    final ideaBlock = workingIdea.toPromptBlock();
+    var genreSeed = workingIdea.genre?.styleSeed ?? '';
+    final excludeSeed = workingIdea.genre?.excludeSeed ?? '';
+    final dna = workingIdea.inspirationDna;
+    final audio = dna?.audioProfile;
+    if (audio != null && audio.hasBpm) {
+      final bpmBit = '${audio.bpmLabel} BPM';
+      genreSeed = genreSeed.isEmpty ? bpmBit : '$bpmBit, $genreSeed';
+    }
+    final dnaHints = dna?.styleSeedHints.trim() ?? '';
+    if (dnaHints.isNotEmpty) {
+      genreSeed = genreSeed.isEmpty ? dnaHints : '$genreSeed, $dnaHints';
+    }
 
     final scenesJson = await runPass(
-      index: 0,
+      index: index,
       system: SystemPrompts.sceneExtractionSystem(),
       user: ideaBlock,
       temperature: 0.8,
     );
     artifacts['scenes'] = scenesJson;
+    index++;
 
     final arcJson = await runPass(
-      index: 1,
+      index: index,
       system: SystemPrompts.arcOutlineSystem(),
       user: '$ideaBlock\n\nSCENE BANK:\n$scenesJson',
       temperature: 0.7,
     );
     artifacts['arc'] = arcJson;
+    index++;
 
     var lyrics = await runPass(
-      index: 2,
+      index: index,
       system: SystemPrompts.draftLyricsSystem(),
       user: '$ideaBlock\n\nSCENE BANK:\n$scenesJson\n\nARC:\n$arcJson',
       temperature: 0.85,
       stripFences: true,
     );
     artifacts['draft'] = lyrics;
+    index++;
 
     lyrics = await runPass(
-      index: 3,
-      system: SystemPrompts.structurePassSystem(),
-      user: 'Normalize structure for Suno:\n\n$lyrics',
-      temperature: 0.3,
-      stripFences: true,
-    );
-    artifacts['structure'] = lyrics;
-
-    lyrics = await runPass(
-      index: 4,
+      index: index,
       system: SystemPrompts.clicheRewriteSystem(),
-      user: 'Rewrite for specificity:\n\n$lyrics\n\nSCENE BANK:\n$scenesJson',
+      user:
+          'Rewrite for voice, rhyme, and anti-slop:\n\n$lyrics\n\nSCENE BANK:\n$scenesJson',
       temperature: 0.75,
       stripFences: true,
     );
     artifacts['cliche'] = lyrics;
+    index++;
 
-    // Optimize (JSON)
-    update(5, passes[5].copyWith(status: PassStatus.running, output: ''));
+    // Optimize (JSON) — also owns structure/chorus normalization now.
+    final optimizeIndex = index;
+    update(
+      optimizeIndex,
+      passes[optimizeIndex].copyWith(status: PassStatus.running, output: ''),
+    );
     var title = '';
     var notes = '';
     try {
@@ -158,8 +224,8 @@ class LyricPipeline {
         temperature: 0.5,
         onToken: (accumulated) {
           update(
-            5,
-            passes[5].copyWith(
+            optimizeIndex,
+            passes[optimizeIndex].copyWith(
               status: PassStatus.running,
               output: accumulated,
             ),
@@ -177,14 +243,25 @@ class LyricPipeline {
       } catch (_) {
         lyrics = _stripFences(optimized);
       }
-      update(5, passes[5].copyWith(status: PassStatus.done, output: lyrics));
+      update(
+        optimizeIndex,
+        passes[optimizeIndex].copyWith(status: PassStatus.done, output: lyrics),
+      );
     } catch (e) {
-      update(5, passes[5].copyWith(status: PassStatus.failed, error: '$e'));
+      update(
+        optimizeIndex,
+        passes[optimizeIndex].copyWith(status: PassStatus.failed, error: '$e'),
+      );
       rethrow;
     }
+    index++;
 
     // Style
-    update(6, passes[6].copyWith(status: PassStatus.running, output: ''));
+    final styleIndex = index;
+    update(
+      styleIndex,
+      passes[styleIndex].copyWith(status: PassStatus.running, output: ''),
+    );
     var style = genreSeed;
     var exclude = excludeSeed;
     try {
@@ -201,14 +278,14 @@ $genreSeed
 EXCLUDE SEED:
 $excludeSeed
 
-FINAL LYRICS (for mood/energy cues only — do NOT put story in style):
+FINAL LYRICS (for mood/energy cues only — do NOT put story or section tags in style):
 $lyrics
 ''',
         temperature: 0.6,
         onToken: (accumulated) {
           update(
-            6,
-            passes[6].copyWith(
+            styleIndex,
+            passes[styleIndex].copyWith(
               status: PassStatus.running,
               output: accumulated,
             ),
@@ -230,14 +307,17 @@ $lyrics
       style = _truncate(style, 900);
       exclude = _truncate(exclude, 900);
       update(
-        6,
-        passes[6].copyWith(
+        styleIndex,
+        passes[styleIndex].copyWith(
           status: PassStatus.done,
           output: 'Style:\n$style\n\nExclude:\n$exclude',
         ),
       );
     } catch (e) {
-      update(6, passes[6].copyWith(status: PassStatus.failed, error: '$e'));
+      update(
+        styleIndex,
+        passes[styleIndex].copyWith(status: PassStatus.failed, error: '$e'),
+      );
       if (style.isEmpty) rethrow;
     }
 
@@ -248,6 +328,20 @@ $lyrics
       title: title,
       notes: notes,
       passArtifacts: artifacts,
+    );
+  }
+
+  Future<InspirationDna> extractInspirationDna({
+    required String artist,
+    required String song,
+    required String lyricsExcerpt,
+    TokenCallback? onToken,
+  }) {
+    return _inspiration.extract(
+      artist: artist,
+      song: song,
+      lyricsExcerpt: lyricsExcerpt,
+      onToken: onToken,
     );
   }
 
@@ -268,14 +362,9 @@ $lyrics
         description: 'Variant $branchLabel lyrics draft',
       ),
       PipelinePass(
-        id: 'structure_$branchLabel',
-        label: 'Structure $branchLabel',
-        description: 'Normalize tags for variant $branchLabel',
-      ),
-      PipelinePass(
         id: 'cliche_$branchLabel',
-        label: 'Anti-cliché $branchLabel',
-        description: 'Specificity rewrite for variant $branchLabel',
+        label: 'Anti-slop $branchLabel',
+        description: 'Voice/rhyme rewrite for variant $branchLabel',
       ),
       PipelinePass(
         id: 'optimize_$branchLabel',
@@ -337,22 +426,16 @@ $lyrics
     );
     lyrics = await runPass(
       index: 1,
-      system: SystemPrompts.structurePassSystem(),
-      user: 'Normalize structure for Suno:\n\n$lyrics',
-      temperature: 0.3,
-      stripFences: true,
-    );
-    lyrics = await runPass(
-      index: 2,
       system: SystemPrompts.clicheRewriteSystem(),
-      user: 'Rewrite for specificity:\n\n$lyrics\n\nSCENE BANK:\n$scenesJson',
+      user:
+          'Rewrite for voice, rhyme, and anti-slop:\n\n$lyrics\n\nSCENE BANK:\n$scenesJson',
       temperature: 0.75,
       stripFences: true,
     );
 
     var title = '';
     var notes = '';
-    update(3, passes[3].copyWith(status: PassStatus.running, output: ''));
+    update(2, passes[2].copyWith(status: PassStatus.running, output: ''));
     try {
       final optimized = await _client.chat(
         system: SystemPrompts.sunoOptimizeSystem(),
@@ -360,8 +443,8 @@ $lyrics
         temperature: 0.5,
         onToken: (accumulated) {
           update(
-            3,
-            passes[3].copyWith(status: PassStatus.running, output: accumulated),
+            2,
+            passes[2].copyWith(status: PassStatus.running, output: accumulated),
           );
         },
       );
@@ -375,9 +458,9 @@ $lyrics
       } catch (_) {
         lyrics = _stripFences(optimized);
       }
-      update(3, passes[3].copyWith(status: PassStatus.done, output: lyrics));
+      update(2, passes[2].copyWith(status: PassStatus.done, output: lyrics));
     } catch (e) {
-      update(3, passes[3].copyWith(status: PassStatus.failed, error: '$e'));
+      update(2, passes[2].copyWith(status: PassStatus.failed, error: '$e'));
       rethrow;
     }
 

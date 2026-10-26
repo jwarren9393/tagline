@@ -4,7 +4,7 @@ Living document. **Update this whenever you make meaningful changes.**
 
 ## What this app is
 
-Tagline is a native Flutter desktop/mobile app (Windows, Linux, Android) that turns rough song ideas into Suno-ready **lyrics** + **style prompts** via a multi-pass NanoGPT workflow. Lyric quality (anti-cliché, concrete imagery, syllable consistency) is the core product.
+Tagline is a native Flutter desktop/mobile app (Windows, Linux, Android) that turns rough song ideas into Suno-ready **lyrics** + **style prompts** via a multi-pass NanoGPT workflow. Lyric quality is the core product: **human voice + substance**, not prop inventories or classic clichés.
 
 ## Current architecture (high level)
 
@@ -13,15 +13,17 @@ lib/
   main.dart
   theme/app_theme.dart
   models/
-    song_idea.dart
+    song_idea.dart, inspiration_dna.dart  # + AudioProfile (BPM etc.)
     generation_result.dart
     generation_session.dart   # + tags, sunoFeedback, llmJudgeNotes, AbComparison
   data/
     cliche_families.dart, genre_templates.dart, eval_fixtures.dart
-  prompts/system_prompts.dart # craft + judge + A/B variant B draft
+  prompts/system_prompts.dart # craft + judge + A/B + inspiration DNA
   services/
     nanogpt_client.dart       # SSE streaming
     lyric_pipeline.dart       # multi-pass + generateLyricBranch (A/B)
+    inspiration_dna_service.dart
+    musicbrainz_client.dart, genius_client.dart, deezer_client.dart
     history_store.dart
     prompt_eval.dart          # local harness
     llm_judge.dart            # optional LLM second opinion
@@ -30,10 +32,12 @@ lib/
   providers/generation_provider.dart
   screens/
     home_shell.dart           # SafeArea + system nav bar styling
-    idea_intake_screen.dart  # growing TextFields (maxLines: null)
-    generating_screen.dart, results_screen.dart, history_screen.dart, settings_screen.dart
+    idea_intake_screen.dart  # genre/mood favorite pickers + growing fields
+    generating_screen.dart, results_screen.dart, history_screen.dart
+    settings_hub_screen.dart, api_settings_screen.dart
   widgets/
     output_panel.dart         # growing editable fields for page scroll
+    favorite_picker_field.dart
     pass_progress, eval_panel, feedback_panel, copy_button
 ```
 
@@ -42,6 +46,9 @@ lib/
 | Feature | Status |
 |---------|--------|
 | Idea intake / multi-pass / streaming | Done |
+| Expanded genre/mood catalogs + favorite dropdowns | Done |
+| Settings hub + API submenu | Done |
+| Inspiration DNA (MB + Genius + Deezer BPM → abstract formula) | Done |
 | SafeArea vs Android gesture/nav bar | Done |
 | Growing fields so page scroll works from inside inputs | Done |
 | View/edit original prompt on results; regenerate / new idea | Done |
@@ -74,12 +81,17 @@ lib/
 - API settings follow Anima NanoGPT UX (not theme): live `models?detailed=true`, credits sheet (wallet + subscription usage), filters, browse sheet, favorites, separate key vs model saves. Pay-as-you-go base = `https://nano-gpt.com/api/v1`. No image-model section (Tagline does not generate images).
 - Share must not pass `text` and `files` together to `share_plus` (Android freeze). Desktop uses `FilePicker.saveFile` instead of a share sheet.
 - Session transfer files use envelope `{format:"tagline.session"|"tagline.history", version, session(s)}`; import upserts by id so the same file restores/updates across devices.
+- Craft target is **a song with a human voice**: end rhyme (AABB/ABAB) + even meter + substance. Ban AI kitchen/recovery/bathroom-mirror pastiche, unrhymed free-verse talk, workshop-forced rhymes, pad repeats, and overlong bridges. One earned detail beats a prop dump. Scene bank is optional ammo, not a checklist. Hooks must be song-specific (no recycled demo chorus DNA).
+- Inspiration DNA is **formula only**: MusicBrainz tags + Genius song match (ephemeral lyrics for analysis) + Deezer measured BPM/duration/gain + optional user paste → NanoGPT distill. Genius lyrics are never persisted into outputs/exports; never reproduce copyrighted lines. Measured audio feeds Style baseline (half-time ok for ballad/R&B). DNA feeds Generate as abstract constraints.
+- Pipeline is 6 LLM passes (no separate structure pass). Local eval ignores chorus ad-lib variance, allows musical “chorus” in Style, and checks verse end-rhyme heuristically.
+- Model shortlist (also in Settings chips): sub `deepseek/deepseek-v4-pro`, `z-ai/glm-5.3`, `meta-llama/llama-4-maverick`; PAYG quality `anthropic/claude-sonnet-5.5`, `anthropic/claude-opus-5.5`.
 
 ## Known issues / TODOs
 
 - Full `TaglineApp` widget tests can hang on Google Fonts — keep service tests.
 - A/B does not regenerate Style (keeps current style for scoring consistency).
 - Share sheet behavior varies by Android OEM.
+- Deezer/Genius only attach on a real title match (miss > wrong song). Deezer BPM coverage is incomplete (bpm=0 or track absent → that source omitted; DNA stays partial).
 
 ## Agent working rules
 
