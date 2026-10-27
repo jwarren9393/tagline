@@ -1,5 +1,6 @@
 import '../models/generation_result.dart';
 import '../models/inspiration_dna.dart';
+import '../models/lyric_rescue_input.dart';
 import '../models/song_idea.dart';
 import '../prompts/system_prompts.dart';
 import 'cliche_detector.dart';
@@ -52,6 +53,34 @@ class LyricPipeline {
           id: 'style',
           label: 'Style prompt',
           description: 'Build front-loaded Style + Exclude Styles',
+        ),
+      ];
+
+  static List<PipelinePass> initialRescuePasses() => const [
+        PipelinePass(
+          id: 'diagnose',
+          label: 'Diagnose',
+          description: 'Find slop and what is worth keeping',
+        ),
+        PipelinePass(
+          id: 'rewrite',
+          label: 'Rescue rewrite',
+          description: 'Keep soul + structure; apply Tagline craft',
+        ),
+        PipelinePass(
+          id: 'cliche',
+          label: 'Anti-slop pass',
+          description: 'Kill leftover pastiche; keep voice and rhyme',
+        ),
+        PipelinePass(
+          id: 'optimize',
+          label: 'Suno optimize',
+          description: 'Final meter, rhyme, and delivery polish',
+        ),
+        PipelinePass(
+          id: 'style',
+          label: 'Style remaster',
+          description: 'Polish Style/Exclude for remix or cover paste-back',
         ),
       ];
 
@@ -319,6 +348,248 @@ $lyrics
         passes[styleIndex].copyWith(status: PassStatus.failed, error: '$e'),
       );
       if (style.isEmpty) rethrow;
+    }
+
+    return GenerationResult(
+      lyrics: lyrics.trim(),
+      stylePrompt: style.trim(),
+      excludeStyles: exclude.trim(),
+      title: title,
+      notes: notes,
+      passArtifacts: artifacts,
+    );
+  }
+
+  /// Remaster existing Suno (or other) lyrics with Tagline craft rules.
+  Future<GenerationResult> rescue({
+    required LyricRescueInput input,
+    PassProgressCallback? onProgress,
+  }) async {
+    if (!input.isValid) {
+      throw ArgumentError(
+        'Paste at least a short block of lyrics to rescue (40+ chars).',
+      );
+    }
+
+    var passes = initialRescuePasses();
+    void update(int index, PipelinePass pass) {
+      passes = List<PipelinePass>.from(passes)..[index] = pass;
+      onProgress?.call(List.unmodifiable(passes));
+    }
+
+    Future<String> runPass({
+      required int index,
+      required String system,
+      required String user,
+      required double temperature,
+      bool stripFences = false,
+    }) async {
+      update(index, passes[index].copyWith(status: PassStatus.running, output: ''));
+      try {
+        final raw = await _client.chat(
+          system: system,
+          user: user,
+          temperature: temperature,
+          onToken: (accumulated) {
+            update(
+              index,
+              passes[index].copyWith(
+                status: PassStatus.running,
+                output: accumulated,
+              ),
+            );
+          },
+        );
+        final text = stripFences ? _stripFences(raw) : raw;
+        update(
+          index,
+          passes[index].copyWith(status: PassStatus.done, output: text),
+        );
+        return text;
+      } catch (e) {
+        update(
+          index,
+          passes[index].copyWith(status: PassStatus.failed, error: '$e'),
+        );
+        rethrow;
+      }
+    }
+
+    final artifacts = <String, String>{};
+    final block = input.toPromptBlock();
+    var index = 0;
+
+    final diagnoseRaw = await runPass(
+      index: index,
+      system: SystemPrompts.rescueDiagnoseSystem(),
+      user: block,
+      temperature: 0.4,
+    );
+    artifacts['diagnose'] = diagnoseRaw;
+    var keepHints = '';
+    var fixHints = '';
+    try {
+      final map = extractJsonObject(diagnoseRaw);
+      final keep = map['keep'];
+      final fix = map['fix'];
+      if (keep is List) {
+        keepHints = keep.map((e) => '$e').where((e) => e.trim().isNotEmpty).join('; ');
+      }
+      if (fix is List) {
+        fixHints = fix.map((e) => '$e').where((e) => e.trim().isNotEmpty).join('; ');
+      }
+      final summary = '${map['summary'] ?? ''}'.trim();
+      if (summary.isNotEmpty) artifacts['diagnose_summary'] = summary;
+    } catch (_) {}
+    index++;
+
+    var lyrics = await runPass(
+      index: index,
+      system: SystemPrompts.rescueRewriteSystem(),
+      user: '''
+$block
+
+DIAGNOSIS (honor KEEP; fix FIX):
+$diagnoseRaw
+
+KEEP HINTS: ${keepHints.isEmpty ? '(none parsed)' : keepHints}
+FIX HINTS: ${fixHints.isEmpty ? '(none parsed)' : fixHints}
+
+Rewrite the full lyrics now.
+''',
+      temperature: 0.75,
+      stripFences: true,
+    );
+    artifacts['rewrite'] = lyrics;
+    index++;
+
+    lyrics = await runPass(
+      index: index,
+      system: SystemPrompts.clicheRewriteSystem(),
+      user: '''
+Anti-slop polish for a RESCUED song (keep identity + creator intent):
+
+CREATOR NOTES: ${input.creatorNotes.trim().isEmpty ? '(none)' : input.creatorNotes.trim()}
+
+CURRENT LYRICS:
+$lyrics
+''',
+      temperature: 0.7,
+      stripFences: true,
+    );
+    artifacts['cliche'] = lyrics;
+    index++;
+
+    final optimizeIndex = index;
+    update(
+      optimizeIndex,
+      passes[optimizeIndex].copyWith(status: PassStatus.running, output: ''),
+    );
+    var title = input.title.trim();
+    var notes = '';
+    try {
+      final optimized = await _client.chat(
+        system: SystemPrompts.sunoOptimizeSystem(),
+        user: 'Optimize rescued lyrics for Suno delivery:\n\n$lyrics',
+        temperature: 0.5,
+        onToken: (accumulated) {
+          update(
+            optimizeIndex,
+            passes[optimizeIndex].copyWith(
+              status: PassStatus.running,
+              output: accumulated,
+            ),
+          );
+        },
+      );
+      artifacts['optimize_raw'] = optimized;
+      try {
+        final map = extractJsonObject(optimized);
+        lyrics = (map['lyrics'] as String?)?.trim().isNotEmpty == true
+            ? map['lyrics'] as String
+            : lyrics;
+        final t = (map['title'] as String?)?.trim() ?? '';
+        if (t.isNotEmpty) title = t;
+        notes = (map['notes'] as String?)?.trim() ?? '';
+      } catch (_) {
+        lyrics = _stripFences(optimized);
+      }
+      update(
+        optimizeIndex,
+        passes[optimizeIndex].copyWith(status: PassStatus.done, output: lyrics),
+      );
+    } catch (e) {
+      update(
+        optimizeIndex,
+        passes[optimizeIndex].copyWith(status: PassStatus.failed, error: '$e'),
+      );
+      rethrow;
+    }
+    index++;
+
+    final styleIndex = index;
+    update(
+      styleIndex,
+      passes[styleIndex].copyWith(status: PassStatus.running, output: ''),
+    );
+    var style = input.stylePrompt.trim();
+    var exclude = input.excludeStyles.trim();
+    try {
+      final styleRaw = await _client.chat(
+        system: SystemPrompts.rescueStyleSystem(),
+        user: '''
+Remaster Style + Exclude for paste-back into Suno (remix / cover / reuse).
+
+$block
+
+RESCUED LYRICS (energy cues only — do not put story in Style):
+$lyrics
+''',
+        temperature: 0.55,
+        onToken: (accumulated) {
+          update(
+            styleIndex,
+            passes[styleIndex].copyWith(
+              status: PassStatus.running,
+              output: accumulated,
+            ),
+          );
+        },
+      );
+      artifacts['style_raw'] = styleRaw;
+      try {
+        final map = extractJsonObject(styleRaw);
+        style = (map['style'] as String?)?.trim().isNotEmpty == true
+            ? map['style'] as String
+            : style;
+        exclude = (map['exclude_styles'] as String?)?.trim().isNotEmpty == true
+            ? map['exclude_styles'] as String
+            : exclude;
+      } catch (_) {
+        if (styleRaw.trim().isNotEmpty && style.isEmpty) {
+          style = styleRaw.trim();
+        }
+      }
+      style = _truncate(style, 900);
+      exclude = _truncate(exclude, 900);
+      update(
+        styleIndex,
+        passes[styleIndex].copyWith(
+          status: PassStatus.done,
+          output: 'Style:\n$style\n\nExclude:\n$exclude',
+        ),
+      );
+    } catch (e) {
+      update(
+        styleIndex,
+        passes[styleIndex].copyWith(status: PassStatus.failed, error: '$e'),
+      );
+      if (style.isEmpty) rethrow;
+    }
+
+    if (notes.isEmpty) {
+      notes =
+          'Rescued lyrics — paste into Suno as a remix/cover/reuse with the remastered Style.';
     }
 
     return GenerationResult(

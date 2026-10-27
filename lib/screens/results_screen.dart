@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/generation_session.dart';
+import '../models/lyric_rescue_input.dart';
 import '../providers/generation_provider.dart';
 import '../services/export_service.dart';
 import '../theme/app_theme.dart';
@@ -189,28 +190,55 @@ class _ResultsScreenState extends State<ResultsScreen> {
       ],
     );
 
+    final isRescue = gen.idea.isRescue;
     final promptPanel = OutputPanel(
       key: ValueKey('prompt-${gen.currentSessionId}-${gen.ideaEditToken}'),
-      title: 'Your prompt',
-      subtitle: 'Original Tagline idea — edit, then regenerate or start new',
-      text: gen.idea.rawIdea,
+      title: isRescue ? 'Rescue intent' : 'Your prompt',
+      subtitle: isRescue
+          ? 'Your notes behind the original song — edit, then re-rescue'
+          : 'Original Tagline idea — edit, then regenerate or start new',
+      text: isRescue
+          ? (gen.idea.rescue?.creatorNotes.trim().isNotEmpty == true
+              ? gen.idea.rescue!.creatorNotes
+              : gen.idea.rawIdea)
+          : gen.idea.rawIdea,
       editable: true,
       minLines: 3,
       maxLines: null,
-      onChanged: (v) => gen.updateIdea(gen.idea.copyWith(rawIdea: v)),
+      onChanged: (v) {
+        if (isRescue) {
+          final r = gen.idea.rescue;
+          gen.updateIdea(
+            gen.idea.copyWith(
+              rawIdea: v,
+              rescue: r?.copyWith(creatorNotes: v) ??
+                  LyricRescueInput(creatorNotes: v, lyrics: ''),
+            ),
+          );
+        } else {
+          gen.updateIdea(gen.idea.copyWith(rawIdea: v));
+        }
+      },
       footer: Wrap(
         spacing: 8,
         runSpacing: 8,
         children: [
           FilledButton.tonalIcon(
             onPressed: gen.busy ? null : () => gen.regenerateFromPrompt(),
-            icon: const Icon(Icons.auto_awesome, size: 18),
-            label: const Text('Regenerate from this prompt'),
+            icon: Icon(
+              isRescue ? Icons.healing_outlined : Icons.auto_awesome,
+              size: 18,
+            ),
+            label: Text(
+              isRescue
+                  ? 'Re-rescue from this paste'
+                  : 'Regenerate from this prompt',
+            ),
           ),
           OutlinedButton.icon(
             onPressed: gen.busy ? null : () => gen.usePromptAsNewIdea(),
             icon: const Icon(Icons.edit_note, size: 18),
-            label: const Text('Edit as new idea'),
+            label: Text(isRescue ? 'Edit rescue paste' : 'Edit as new idea'),
           ),
         ],
       ),
@@ -295,11 +323,13 @@ class _ResultsScreenState extends State<ResultsScreen> {
               TextButton.icon(
                 onPressed: () => gen.backToIdea(),
                 icon: const Icon(Icons.arrow_back),
-                label: const Text('Idea'),
+                label: Text(gen.idea.isRescue ? 'Rescue' : 'Idea'),
               ),
               TextButton(
                 onPressed: gen.usePromptAsNewIdea,
-                child: const Text('New from prompt'),
+                child: Text(
+                  gen.idea.isRescue ? 'Edit paste' : 'New from prompt',
+                ),
               ),
               const Spacer(),
               if (gen.error != null)

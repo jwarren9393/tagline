@@ -1,5 +1,6 @@
 import '../data/genre_templates.dart';
 import 'inspiration_dna.dart';
+import 'lyric_rescue_input.dart';
 
 /// User input for a generation session.
 class SongIdea {
@@ -14,6 +15,8 @@ class SongIdea {
     this.inspirationSong = '',
     this.inspirationLyricsExcerpt = '',
     this.inspirationDna,
+    this.mode = 'generate',
+    this.rescue,
   });
 
   final String rawIdea;
@@ -28,6 +31,12 @@ class SongIdea {
   final String inspirationSong;
   final String inspirationLyricsExcerpt;
   final InspirationDna? inspirationDna;
+
+  /// `generate` (idea → song) or `rescue` (existing Suno lyrics → craft rewrite).
+  final String mode;
+  final LyricRescueInput? rescue;
+
+  bool get isRescue => mode == 'rescue';
 
   GenreTemplate? get genre => genreId == null ? null : genreById(genreId!);
 
@@ -57,8 +66,11 @@ class SongIdea {
     String? inspirationSong,
     String? inspirationLyricsExcerpt,
     InspirationDna? inspirationDna,
+    String? mode,
+    LyricRescueInput? rescue,
     bool clearGenre = false,
     bool clearInspirationDna = false,
+    bool clearRescue = false,
   }) {
     return SongIdea(
       rawIdea: rawIdea ?? this.rawIdea,
@@ -74,6 +86,8 @@ class SongIdea {
       inspirationDna: clearInspirationDna
           ? null
           : (inspirationDna ?? this.inspirationDna),
+      mode: mode ?? this.mode,
+      rescue: clearRescue ? null : (rescue ?? this.rescue),
     );
   }
 
@@ -119,7 +133,8 @@ class SongIdea {
     return buf.toString();
   }
 
-  bool get isValid => rawIdea.trim().length >= 8;
+  bool get isValid =>
+      isRescue ? (rescue?.isValid ?? false) : rawIdea.trim().length >= 8;
 
   Map<String, dynamic> toJson() => {
         'rawIdea': rawIdea,
@@ -132,6 +147,8 @@ class SongIdea {
         'inspirationSong': inspirationSong,
         'inspirationLyricsExcerpt': inspirationLyricsExcerpt,
         if (inspirationDna != null) 'inspirationDna': inspirationDna!.toJson(),
+        'mode': mode,
+        if (rescue != null) 'rescue': rescue!.toJson(),
       };
 
   factory SongIdea.fromJson(Map<String, dynamic> json) {
@@ -139,6 +156,11 @@ class SongIdea {
     final rawDna = json['inspirationDna'];
     if (rawDna is Map) {
       dna = InspirationDna.fromJson(Map<String, dynamic>.from(rawDna));
+    }
+    LyricRescueInput? rescue;
+    final rawRescue = json['rescue'];
+    if (rawRescue is Map) {
+      rescue = LyricRescueInput.fromJson(Map<String, dynamic>.from(rawRescue));
     }
     return SongIdea(
       rawIdea: json['rawIdea'] as String? ?? '',
@@ -155,6 +177,8 @@ class SongIdea {
       inspirationLyricsExcerpt:
           json['inspirationLyricsExcerpt'] as String? ?? '',
       inspirationDna: dna,
+      mode: json['mode'] as String? ?? 'generate',
+      rescue: rescue,
     );
   }
 }

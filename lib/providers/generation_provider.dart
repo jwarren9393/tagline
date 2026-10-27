@@ -18,7 +18,7 @@ import '../services/nanogpt_client.dart';
 import '../services/prompt_eval.dart';
 import '../services/secure_settings.dart';
 
-enum AppView { idea, generating, results }
+enum AppView { idea, rescue, generating, results }
 
 class ChatTurn {
   const ChatTurn({required this.role, required this.text});
@@ -170,7 +170,30 @@ class GenerationProvider extends ChangeNotifier {
     }
   }
 
+  void showGenerateMode() {
+    error = null;
+    idea = idea.copyWith(mode: 'generate');
+    view = AppView.idea;
+    ideaEditToken++;
+    notifyListeners();
+  }
+
+  void showRescueMode() {
+    error = null;
+    idea = idea.copyWith(
+      mode: 'rescue',
+      rescue: idea.rescue,
+    );
+    view = AppView.rescue;
+    ideaEditToken++;
+    notifyListeners();
+  }
+
   Future<void> generate({bool createNewSession = true}) async {
+    if (idea.isRescue) {
+      await rescueLyrics(createNewSession: createNewSession);
+      return;
+    }
     if (!idea.isValid) {
       error = 'Enter a song idea (at least a short sentence).';
       notifyListeners();
@@ -244,6 +267,67 @@ class GenerationProvider extends ChangeNotifier {
 
   /// Regenerate using the (possibly edited) idea while keeping the session.
   Future<void> regenerateFromPrompt() => generate(createNewSession: false);
+
+  /// Remaster pasted Suno lyrics with Tagline craft (diagnose → rewrite → polish).
+  Future<void> rescueLyrics({bool createNewSession = true}) async {
+    final rescue = idea.rescue;
+    if (rescue == null || !rescue.isValid) {
+      error = 'Paste the original lyrics (at least a short verse/chorus block).';
+      notifyListeners();
+      return;
+    }
+    busy = true;
+    error = null;
+    result = null;
+    feedback = null;
+    evalSummary = null;
+    llmJudgeNotes = '';
+    abComparison = null;
+    chat = [];
+    idea = idea.copyWith(mode: 'rescue', rescue: rescue);
+    if (createNewSession) {
+      currentSessionId = null;
+      sessionTags = ['rescue'];
+      sunoFeedback = '';
+    } else if (!sessionTags.contains('rescue')) {
+      sessionTags = [...sessionTags, 'rescue'];
+    }
+    passes = LyricPipeline.initialRescuePasses();
+    view = AppView.generating;
+    notifyListeners();
+
+    try {
+      final out = await _pipeline.rescue(
+        input: rescue,
+        onProgress: (p) {
+          passes = p;
+          _notifyStreamThrottled();
+        },
+      );
+      notifyListeners();
+      result = out;
+      feedback = _pipeline.feedbackFor(out.lyrics);
+      evalSummary = _eval.evaluateResult(out);
+      view = AppView.results;
+      chat = [
+        ChatTurn(
+          role: 'assistant',
+          text: out.notes.isNotEmpty
+              ? 'Rescue ready. ${out.notes}\n\nQuality: ${evalSummary!.label}. '
+                  'Copy the pack back into Suno for a remix, cover, or reuse.'
+              : 'Rescue ready. Quality: ${evalSummary!.label}. '
+                  'Copy the pack back into Suno for a remix, cover, or reuse.',
+        ),
+      ];
+      await _persistCurrent(createIfNeeded: true);
+    } catch (e) {
+      error = e.toString();
+      view = AppView.rescue;
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
 
   Future<void> runAbExperiment() async {
     if (result == null || busy) return;
@@ -654,7 +738,7 @@ class GenerationProvider extends ChangeNotifier {
       result = null;
       currentSessionId = null;
     }
-    view = AppView.idea;
+    view = idea.isRescue ? AppView.rescue : AppView.idea;
     ideaEditToken++;
     notifyListeners();
   }
@@ -667,7 +751,7 @@ class GenerationProvider extends ChangeNotifier {
     sunoFeedback = '';
     llmJudgeNotes = '';
     abComparison = null;
-    view = AppView.idea;
+    view = idea.isRescue ? AppView.rescue : AppView.idea;
     ideaEditToken++;
     notifyListeners();
   }
@@ -707,7 +791,7 @@ class GenerationProvider extends ChangeNotifier {
     sunoFeedback = '';
     llmJudgeNotes = '';
     abComparison = null;
-    view = AppView.idea;
+    view = idea.isRescue ? AppView.rescue : AppView.idea;
     ideaEditToken++;
     notifyListeners();
   }

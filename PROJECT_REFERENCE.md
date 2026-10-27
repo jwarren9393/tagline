@@ -55,23 +55,28 @@ Quality is enforced primarily through **system prompts, few-shot examples, and m
 lib/
   main.dart
   theme/app_theme.dart
-  models/song_idea.dart
-  models/generation_result.dart
-  data/cliche_families.dart
-  data/genre_templates.dart
-  prompts/system_prompts.dart          # CORE EXPERTISE
-  services/secure_settings.dart
-  services/nanogpt_client.dart
-  services/lyric_pipeline.dart         # CORE ORCHESTRATION
-  services/syllable_analyzer.dart
-  services/cliche_detector.dart
-  providers/settings_provider.dart
-  providers/generation_provider.dart
-  screens/home_shell.dart
-  screens/idea_intake_screen.dart
-  screens/generating_screen.dart
-  screens/results_screen.dart
-  screens/settings_screen.dart
+  models/
+    song_idea.dart              # mode: generate | rescue; optional InspirationDna / LyricRescueInput
+    inspiration_dna.dart        # + AudioProfile (BPM/duration/gain)
+    lyric_rescue_input.dart
+    generation_result.dart, generation_session.dart
+  data/cliche_families.dart, genre_templates.dart, eval_fixtures.dart
+  prompts/system_prompts.dart          # CORE EXPERTISE (craft + DNA + rescue + judge + A/B)
+  services/
+    nanogpt_client.dart, nanogpt_catalog_service.dart
+    lyric_pipeline.dart                # generate + rescue + A/B branch
+    inspiration_dna_service.dart
+    musicbrainz_client.dart, genius_client.dart, deezer_client.dart
+    track_match.dart                   # strict title match shared by Genius/Deezer
+    history_store.dart, export_service.dart
+    prompt_eval.dart, llm_judge.dart
+    syllable_analyzer.dart, cliche_detector.dart, secure_settings.dart
+  providers/settings_provider.dart, generation_provider.dart
+  screens/
+    home_shell.dart                    # New song / Lyric Rescue segmented switcher
+    idea_intake_screen.dart, lyric_rescue_screen.dart
+    generating_screen.dart, results_screen.dart, history_screen.dart
+    settings_hub_screen.dart, api_settings_screen.dart
   widgets/...
 ```
 
@@ -81,36 +86,47 @@ lib/
 
 | `AppView` | Screen | Role |
 |-----------|--------|------|
-| `idea` | `IdeaIntakeScreen` | Free text + genre/mood/constraints |
-| `generating` | `GeneratingScreen` | Per-pass progress list |
+| `idea` | `IdeaIntakeScreen` | Free text + genre/mood/constraints + Inspiration DNA |
+| `rescue` | `LyricRescueScreen` | Paste existing Suno lyrics/style + creator intent |
+| `generating` | `GeneratingScreen` | Per-pass progress list (generate or rescue) |
 | `results` | `ResultsScreen` | Lyrics / Style / Exclude + tools + refine chat |
 
-Settings is a pushed hub (`SettingsHubScreen` → `ApiSettingsScreen`), not an `AppView`.
-Inspiration DNA lives on idea intake (artist / song / optional paste → abstract formula via MusicBrainz tags + Genius ephemeral lyrics analysis + Deezer BPM/duration/gain + NanoGPT). Genius lyrics are analysis-only and must not appear in Style/Lyrics outputs. Measured Deezer audio seeds Style (BPM may be half-timed for ballads).
+Home intake shows a **New song / Lyric Rescue** segmented control. Settings is a pushed hub (`SettingsHubScreen` → `ApiSettingsScreen`), not an `AppView`.
+
+**Inspiration DNA** (idea intake): artist / song / optional paste → MusicBrainz tags + Genius ephemeral lyrics analysis + Deezer BPM/duration/gain → NanoGPT abstract formula. Genius lyrics are analysis-only and must not appear in Style/Lyrics outputs. Each enrichment source only attaches on a real match (miss > wrong song). Measured Deezer audio seeds Style (BPM may be half-timed for ballads).
+
+**Lyric Rescue** (`AppView.rescue`): paste existing Suno lyrics + optional Style/Exclude + creator intent → `LyricPipeline.rescue` → same results/export pack. Sessions auto-tag `rescue`. By default Rescue keeps section skeleton/length and may protect a strong original chorus for remix continuity; put tighten/chorus-rewrite asks in creator notes.
 
 ### 3.4 Data flow
 
 ```
-User SongIdea
+User SongIdea (mode=generate)
     → LyricPipeline.generate()
         → NanoGptClient.chat() × N passes
         → GenerationResult { lyrics, stylePrompt, excludeStyles, title, notes, passArtifacts }
+
+User SongIdea (mode=rescue, LyricRescueInput)
+    → LyricPipeline.rescue()
+        → diagnose → rewrite → anti-slop → optimize → style remaster
+        → GenerationResult (same shape)
+
     → SyllableAnalyzer + ClicheDetector → LyricFeedback
-    → UI panels (editable) + copy to clipboard
+    → UI panels (editable) + copy / share pack
 ```
 
 Refinement paths (post-generate):
 - `makeMoreSpecific()` — full lyrics rewrite for concreteness
 - `regenerateSection(sectionTag)` — rewrite one tagged section, return full lyrics
 - `sendChat(message)` — conversational refine with current lyrics/style in context
+- `regenerateFromPrompt()` / `rescueLyrics()` — re-run generate or rescue for the active mode
 
 ---
 
 ## 4. NanoGPT integration
 
-### Endpoints
-- Subscription (default): `https://nano-gpt.com/api/subscription/v1/chat/completions`
-- Direct API: `https://api.nano-gpt.com/api/v1/chat/completions`
+### Endpoints (bases; client appends `/chat/completions`)
+- Subscription (default on): `https://nano-gpt.com/api/subscription/v1`
+- Pay-as-you-go: `https://nano-gpt.com/api/v1`
 
 ### Auth
 `Authorization: Bearer <API_KEY>`
@@ -141,7 +157,9 @@ JSON extraction helper: `extractJsonObject()` (handles fences / surrounding pros
 
 ## 5. Multi-pass generation pipeline
 
-Implemented in `lib/services/lyric_pipeline.dart`. Passes (in order):
+Implemented in `lib/services/lyric_pipeline.dart`.
+
+### 5.1 Generate (`LyricPipeline.generate`)
 
 | # | id | Purpose | System prompt factory |
 |---|-----|---------|------------------------|
@@ -154,6 +172,20 @@ Implemented in `lib/services/lyric_pipeline.dart`. Passes (in order):
 | 6 | `style` | Style + Exclude Styles | `stylePromptSystem` → JSON `{style,exclude_styles}` |
 
 No separate structure LLM pass (draft + optimize own tags/chorus). Temperatures tuned per pass. Style failure is non-fatal if a genre `styleSeed` exists.
+
+### 5.2 Lyric Rescue (`LyricPipeline.rescue`)
+
+| # | id | Purpose | System prompt factory |
+|---|-----|---------|------------------------|
+| 0 | `diagnose` | Keep vs fix; structure notes | `rescueDiagnoseSystem` → JSON |
+| 1 | `rewrite` | Remaster lyrics; keep soul/skeleton | `rescueRewriteSystem` → lyrics |
+| 2 | `cliche` | Anti-slop polish | `clicheRewriteSystem` → lyrics |
+| 3 | `optimize` | Final polish + title | `sunoOptimizeSystem` → JSON |
+| 4 | `style` | Remaster Style/Exclude for paste-back | `rescueStyleSystem` → JSON |
+
+Input model: `LyricRescueInput` (title, lyrics, stylePrompt, excludeStyles, creatorNotes) stored on `SongIdea.rescue` with `mode: 'rescue'`.
+
+**Expectation:** Rescue preserves section length/skeleton by default (an 8-line verse stays ~8 lines). New-song generation aims tighter (~6–10 syllables/line). Users who want shorter verses or a rewritten chorus should say so in creator notes.
 
 Progress is reported via `PassProgressCallback` → UI `PassProgressList`.
 
@@ -289,17 +321,18 @@ flutter test test/prompt_eval_test.dart
 4. Model picks: pay-as-you-go Claude Opus 5.5 / Fable 5.1 / Sonnet 5.5; subscription try GLM 5.3, DeepSeek V4 Pro / V3.1, Llama 4 Maverick.
 
 ### Natural next features
-- Export lyrics/style as `.txt` / share sheet
-- History search + tags
-- Optional LLM judge pass scored against the same rubric
-- A/B prompt experiment mode using eval scores
-- User “reference generation notes” after pasting into Suno (close the feedback loop)
+- Offline mock generation
+- Stronger Rescue controls (verse length / chorus rewrite toggles) instead of notes-only
+- Suno remix/cover workflow guidance once product-side options are clearer
+- Cross-device sync beyond portable `.tagline.json`
 
 ### Do not
 - Collapse to single-shot generation for “speed.”
 - Put story or tags in the Style field.
 - Commit API keys.
 - Copy copyrighted lyrics or proprietary Suno prompt packs verbatim.
+- Attach Genius/Deezer metadata for the wrong song (miss > wrong match).
+
 
 ---
 
@@ -312,9 +345,9 @@ flutter test test/prompt_eval_test.dart
 
 ## 17. Prompt reuse
 
-- Results screen **Your prompt** panel edits `SongIdea.rawIdea`.
-- Actions: **Regenerate from this prompt** (same session), **Edit as new idea** / **New from prompt** (intake with text preserved via `ideaEditToken`).
-- History tile **Reuse prompt** loads idea into intake without opening outputs.
+- Results screen **Your prompt** / **Rescue intent** panel edits `SongIdea.rawIdea` (and rescue creator notes when `mode == rescue`).
+- Actions: **Regenerate / Re-rescue** (same session), **Edit as new idea / Edit rescue paste** (intake with text preserved via `ideaEditToken`).
+- History tile **Reuse prompt** loads idea into the matching intake (`idea` vs `rescue`) without opening outputs.
 
 ## 18. Export, feedback, judge, A/B
 
@@ -341,14 +374,17 @@ Settings screen rebuilt to match Anima’s NanoGPT connection UX (Tagline theme)
 
 ## 20. Current implementation snapshot
 
-As of the Anima-style API settings milestone:
+As of Inspiration DNA + Lyric Rescue:
+- Home modes: **New song** and **Lyric Rescue** (segmented switcher)
+- Inspiration DNA: MusicBrainz + Genius + Deezer (strict title match) → abstract formula + measured audio baseline
+- Lyric Rescue: diagnose → rewrite → anti-slop → optimize → style remaster; sessions tagged `rescue`
 - SafeArea / scroll-from-field fixes
-- Prompt visibility + regenerate / new-idea / history reuse
+- Prompt visibility + regenerate / new-idea / history reuse (mode-aware)
 - Export/share (Suno pack + portable `.tagline.json` session/history), Suno feedback, history search+tags, LLM judge, A/B
-- Live NanoGPT catalog / credits / favorites settings
-- Prior: streaming, history persistence, local eval, multi-pass, genre templates
-- Dependencies: `share_plus`, `path_provider`, `path`, …
+- Live NanoGPT catalog / credits / favorites settings (Anima-parity UX)
+- Prior: streaming, history persistence, local eval, multi-pass, expanded genre/mood favorites
+- Dependencies: `share_plus`, `path_provider`, `path`, `file_picker`, …
 - Platforms: Windows, Linux, Android only
-- Not yet: offline mock generation, cross-device sync
+- Not yet: offline mock generation, cross-device sync, Rescue length/chorus UI toggles
 
 When you change any of the above, update this file, `AGENTS.md`, and `README.md`.

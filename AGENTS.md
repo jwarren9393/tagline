@@ -14,6 +14,7 @@ lib/
   theme/app_theme.dart
   models/
     song_idea.dart, inspiration_dna.dart  # + AudioProfile (BPM etc.)
+    lyric_rescue_input.dart               # paste-back remaster input
     generation_result.dart
     generation_session.dart   # + tags, sunoFeedback, llmJudgeNotes, AbComparison
   data/
@@ -21,18 +22,20 @@ lib/
   prompts/system_prompts.dart # craft + judge + A/B + inspiration DNA
   services/
     nanogpt_client.dart       # SSE streaming
-    lyric_pipeline.dart       # multi-pass + generateLyricBranch (A/B)
+    lyric_pipeline.dart       # generate + rescue + generateLyricBranch (A/B)
     inspiration_dna_service.dart
     musicbrainz_client.dart, genius_client.dart, deezer_client.dart
+    track_match.dart          # strict title match (miss > wrong song)
     history_store.dart
     prompt_eval.dart          # local harness
     llm_judge.dart            # optional LLM second opinion
     export_service.dart       # copy/share Suno pack
     syllable_analyzer.dart, cliche_detector.dart, secure_settings.dart
-  providers/generation_provider.dart
+  providers/generation_provider.dart  # AppView: idea | rescue | generating | results
   screens/
-    home_shell.dart           # SafeArea + system nav bar styling
+    home_shell.dart           # SafeArea + New song / Lyric Rescue switcher
     idea_intake_screen.dart  # genre/mood favorite pickers + growing fields
+    lyric_rescue_screen.dart # paste existing Suno lyrics/style → remaster
     generating_screen.dart, results_screen.dart, history_screen.dart
     settings_hub_screen.dart, api_settings_screen.dart
   widgets/
@@ -49,6 +52,7 @@ lib/
 | Expanded genre/mood catalogs + favorite dropdowns | Done |
 | Settings hub + API submenu | Done |
 | Inspiration DNA (MB + Genius + Deezer BPM → abstract formula) | Done |
+| Lyric Rescue (paste Suno lyrics/style → craft remaster) | Done |
 | SafeArea vs Android gesture/nav bar | Done |
 | Growing fields so page scroll works from inside inputs | Done |
 | View/edit original prompt on results; regenerate / new idea | Done |
@@ -83,7 +87,8 @@ lib/
 - Session transfer files use envelope `{format:"tagline.session"|"tagline.history", version, session(s)}`; import upserts by id so the same file restores/updates across devices.
 - Craft target is **a song with a human voice**: end rhyme (AABB/ABAB) + even meter + substance. Ban AI kitchen/recovery/bathroom-mirror pastiche, unrhymed free-verse talk, workshop-forced rhymes, pad repeats, and overlong bridges. One earned detail beats a prop dump. Scene bank is optional ammo, not a checklist. Hooks must be song-specific (no recycled demo chorus DNA).
 - Inspiration DNA is **formula only**: MusicBrainz tags + Genius song match (ephemeral lyrics for analysis) + Deezer measured BPM/duration/gain + optional user paste → NanoGPT distill. Genius lyrics are never persisted into outputs/exports; never reproduce copyrighted lines. Measured audio feeds Style baseline (half-time ok for ballad/R&B). DNA feeds Generate as abstract constraints.
-- Pipeline is 6 LLM passes (no separate structure pass). Local eval ignores chorus ad-lib variance, allows musical “chorus” in Style, and checks verse end-rhyme heuristically.
+- Lyric Rescue is a separate home mode (`AppView.rescue`): paste existing Suno lyrics (+ optional Style/Exclude + creator intent) → diagnose → rewrite → anti-slop → optimize → style remaster. Keeps song soul + **section skeleton/length** unless creator notes ask to tighten (e.g. “cut verses to 4 lines”). Chorus may stay close for remix continuity — tell Rescue explicitly if the chorus needs a craft rewrite. Output is a Suno pack for remix/cover/reuse (Suno-side remix UX left to the user). Sessions auto-tag `rescue`.
+- Generate pipeline is 6 LLM passes (no separate structure pass). Rescue is 5 passes (diagnose/rewrite/cliche/optimize/style). Local eval ignores chorus ad-lib variance, allows musical “chorus” in Style, and checks verse end-rhyme heuristically.
 - Model shortlist (also in Settings chips): sub `deepseek/deepseek-v4-pro`, `z-ai/glm-5.3`, `meta-llama/llama-4-maverick`; PAYG quality `anthropic/claude-sonnet-5.5`, `anthropic/claude-opus-5.5`.
 
 ## Known issues / TODOs
@@ -92,6 +97,7 @@ lib/
 - A/B does not regenerate Style (keeps current style for scoring consistency).
 - Share sheet behavior varies by Android OEM.
 - Deezer/Genius only attach on a real title match (miss > wrong song). Deezer BPM coverage is incomplete (bpm=0 or track absent → that source omitted; DNA stays partial).
+- Lyric Rescue can leave epic/original choruses mostly intact and preserve long verses unless the user asks to compress — expect remaster continuity over New-song tightness by default.
 
 ## Agent working rules
 

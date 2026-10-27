@@ -2,7 +2,7 @@
 
 **Expert pre-production tool for [Suno AI](https://suno.com)** (Premier / Studio).
 
-Tagline turns a rough song idea — theme, mood, story fragments, genre preference, reference vibes — into high-quality **Suno-ready lyrics** and a clean, front-loaded **Style prompt** (plus Exclude Styles). Paste the outputs into Custom Mode / Studio and get better first-generation results with less generate–wait–rewrite.
+Tagline turns a rough song idea — theme, mood, story fragments, genre preference, reference vibes — into high-quality **Suno-ready lyrics** and a clean, front-loaded **Style prompt** (plus Exclude Styles). It can also **rescue** songs that already sound good in Suno but have weak / AI lyrics. Paste the outputs into Custom Mode / Studio (or remix/cover) and get better results with less generate–wait–rewrite.
 
 ## Who it’s for
 
@@ -10,7 +10,9 @@ Songwriters and producers who use Suno and want lyrics that actually sing: concr
 
 ## Key features
 
-- **Multi-pass generation** (not one-shot): scene/sensory extraction → story arc → draft → structure tags → anti-cliché rewrite → Suno optimize → style prompt
+- **Multi-pass generation** (not one-shot): optional Inspiration DNA → voice brief → story arc → draft → anti-slop → Suno optimize → style prompt
+- **Inspiration DNA** — artist/song → MusicBrainz tags + Genius (ephemeral lyric patterns) + Deezer BPM/duration/gain → abstract formula (never a copy)
+- **Lyric Rescue** — separate home mode to paste an existing Suno song (lyrics + Style + your intent) and remaster craft for remix/cover paste-back
 - **Live streaming** of each pass into the progress UI (SSE via NanoGPT)
 - **Original prompt on results** — view/edit, regenerate from it, or start a new idea; reuse from History
 - **Suno-accurate formatting**: section tags on their own lines; Style = sound only; negatives in Exclude Styles
@@ -19,7 +21,7 @@ Songwriters and producers who use Suno and want lyrics that actually sing: concr
 - **A/B test** lyric variants (standard vs voice/substance); keeps the higher eval score
 - **Suno feedback loop** — note what rushed/worked after generating in Suno; feeds Refine
 - **Export** — copy full pack or share `.txt` (Style + Exclude + Lyrics + original prompt)
-- **History** — auto-save, pin, search, tags, reopen, reuse prompt
+- **History** — auto-save, pin, search, tags, reopen, reuse prompt; portable `.tagline.json` import/export
 - **Mobile-friendly layout** — clears system nav/gesture bar; page scrolls from inside text fields
 - **Genre templates**, section regen, refinement chat
 - **Anima-style API & connection** — live model catalog, credits sheet, favorites, subscription toggle
@@ -83,13 +85,15 @@ flutter build apk
 2. Optionally load a **genre template**, moods / constraints, and **Inspiration DNA**
    (artist / song → MusicBrainz + Genius + Deezer BPM/duration, optional paste →
    abstract formula, never a copy).
-3. Wait for the multi-pass pipeline (progress is shown per pass).
-4. Copy **Lyrics** into Suno’s Lyrics field and **Style** / **Exclude Styles** into the matching fields.
-5. On results, your **prompt** stays editable — regenerate from it or “Edit as new idea.”
-6. Check **Prompt eval**; optionally run **LLM judge** or **A/B test**.
-7. **Copy pack** / **Share** into Suno (desktop saves a `.txt`; Android opens the share sheet with the pack file). Afterward fill **Suno feedback** so Refine can target real delivery issues.
-8. **Export session** / History **Import** / **Export all** move sessions as `.tagline.json` between desktop and Android (upsert by id).
-9. History supports search, tags, and **reuse prompt**.
+3. Or switch to **Lyric Rescue**: paste an existing Suno song’s lyrics (and Style),
+   add what you meant the song to be about, and remaster the craft for remix/cover paste-back.
+4. Wait for the multi-pass pipeline (progress is shown per pass).
+5. Copy **Lyrics** into Suno’s Lyrics field and **Style** / **Exclude Styles** into the matching fields.
+6. On results, your **prompt** stays editable — regenerate from it or “Edit as new idea.”
+7. Check **Prompt eval**; optionally run **LLM judge** or **A/B test**.
+8. **Copy pack** / **Share** into Suno (desktop saves a `.txt`; Android opens the share sheet with the pack file). Afterward fill **Suno feedback** so Refine can target real delivery issues.
+9. **Export session** / History **Import** / **Export all** move sessions as `.tagline.json` between desktop and Android (upsert by id).
+10. History supports search, tags, and **reuse prompt**.
 
 ## Project docs
 
