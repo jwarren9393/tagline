@@ -87,8 +87,9 @@ lib/
 - Session transfer files use envelope `{format:"tagline.session"|"tagline.history", version, session(s)}`; import upserts by id so the same file restores/updates across devices.
 - Craft target is **a song with a human voice**: end rhyme (AABB/ABAB) + even meter + substance. Ban AI kitchen/recovery/bathroom-mirror pastiche, unrhymed free-verse talk, workshop-forced rhymes, pad repeats, and overlong bridges. One earned detail beats a prop dump. Scene bank is optional ammo, not a checklist. Hooks must be song-specific (no recycled demo chorus DNA).
 - Inspiration DNA is **formula only**: MusicBrainz tags + Genius song match (ephemeral lyrics for analysis) + Deezer measured BPM/duration/gain + optional user paste → NanoGPT distill. Genius lyrics are never persisted into outputs/exports; never reproduce copyrighted lines. Measured audio feeds Style baseline (half-time ok for ballad/R&B). DNA feeds Generate as abstract constraints.
-- Lyric Rescue is a separate home mode (`AppView.rescue`): paste existing Suno lyrics (+ optional Style/Exclude + creator intent) → diagnose → rewrite → anti-slop → optimize → style remaster. Keeps song soul + **section skeleton/length** unless creator notes ask to tighten (e.g. “cut verses to 4 lines”). Chorus may stay close for remix continuity — tell Rescue explicitly if the chorus needs a craft rewrite. Output is a Suno pack for remix/cover/reuse (Suno-side remix UX left to the user). Sessions auto-tag `rescue`.
+- Lyric Rescue is a separate home mode (`AppView.rescue`): paste existing Suno lyrics (+ optional Style/Exclude + creator intent) → diagnose → rewrite → anti-slop → optimize → style remaster. Explicit toggles on `LyricRescueInput`: `preserveStructureStrictly` (default on), `tightenVerseLength`, `rewriteChorus`. Constraints are injected into diagnose/rewrite/cliche/optimize prompts and shown as chips on results. Output is a Suno pack for remix/cover/reuse. Sessions auto-tag `rescue`.
 - Generate pipeline is 6 LLM passes (no separate structure pass). Rescue is 5 passes (diagnose/rewrite/cliche/optimize/style). Local eval ignores chorus ad-lib variance, allows musical “chorus” in Style, and checks verse end-rhyme heuristically.
+- Craft prompts include stronger few-shots (tight soul/scene verses + concrete choruses) and expanded AI-pastiche cliché families (phoenix stacks, workshop filler, midnight-city mood boards).
 - Model shortlist (also in Settings chips): sub `deepseek/deepseek-v4-pro`, `z-ai/glm-5.3`, `meta-llama/llama-4-maverick`; PAYG quality `anthropic/claude-sonnet-5.5`, `anthropic/claude-opus-5.5`.
 
 ## Known issues / TODOs
@@ -97,7 +98,7 @@ lib/
 - A/B does not regenerate Style (keeps current style for scoring consistency).
 - Share sheet behavior varies by Android OEM.
 - Deezer/Genius only attach on a real title match (miss > wrong song). Deezer BPM coverage is incomplete (bpm=0 or track absent → that source omitted; DNA stays partial).
-- Lyric Rescue can leave epic/original choruses mostly intact and preserve long verses unless the user asks to compress — expect remaster continuity over New-song tightness by default.
+- Lyric Rescue defaults protect structure + original chorus feel; use **Tighten verse length** / **Rewrite chorus** (or turn off **Preserve structure**) for a harder remaster.
 
 ## Agent working rules
 

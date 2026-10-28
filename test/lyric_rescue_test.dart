@@ -42,5 +42,38 @@ void main() {
     expect(block, contains('pride vs loneliness'));
     expect(block, contains('ORIGINAL STYLE'));
     expect(block, contains('neo-soul'));
+    expect(block, contains('ACTIVE RESCUE CONSTRAINTS'));
+    expect(block, contains('PRESERVE STRUCTURE STRICTLY'));
+  });
+
+  test('constraint flags round-trip and appear in prompt', () {
+    const input = LyricRescueInput(
+      lyrics: '[Verse 1]\nSomething long enough to pass the gatekeepers here\n',
+      preserveStructureStrictly: false,
+      tightenVerseLength: true,
+      rewriteChorus: true,
+    );
+    final again = LyricRescueInput.fromJson(input.toJson());
+    expect(again.preserveStructureStrictly, isFalse);
+    expect(again.tightenVerseLength, isTrue);
+    expect(again.rewriteChorus, isTrue);
+    expect(again.activeConstraintLabels, contains('Tighten verses'));
+    expect(again.activeConstraintLabels, contains('Rewrite chorus'));
+    expect(again.activeConstraintLabels, contains('Flexible structure'));
+
+    final block = again.toPromptBlock();
+    expect(block, contains('TIGHTEN VERSE LENGTH'));
+    expect(block, contains('REWRITE CHORUS'));
+    expect(block, contains('FLEXIBLE STRUCTURE'));
+  });
+
+  test('legacy JSON defaults preserveStructureStrictly to true', () {
+    final again = LyricRescueInput.fromJson({
+      'lyrics': List.filled(10, 'a line that sings').join('\n'),
+      'title': 'Old',
+    });
+    expect(again.preserveStructureStrictly, isTrue);
+    expect(again.tightenVerseLength, isFalse);
+    expect(again.rewriteChorus, isFalse);
   });
 }

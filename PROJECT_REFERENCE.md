@@ -95,7 +95,16 @@ Home intake shows a **New song / Lyric Rescue** segmented control. Settings is a
 
 **Inspiration DNA** (idea intake): artist / song / optional paste → MusicBrainz tags + Genius ephemeral lyrics analysis + Deezer BPM/duration/gain → NanoGPT abstract formula. Genius lyrics are analysis-only and must not appear in Style/Lyrics outputs. Each enrichment source only attaches on a real match (miss > wrong song). Measured Deezer audio seeds Style (BPM may be half-timed for ballads).
 
-**Lyric Rescue** (`AppView.rescue`): paste existing Suno lyrics + optional Style/Exclude + creator intent → `LyricPipeline.rescue` → same results/export pack. Sessions auto-tag `rescue`. By default Rescue keeps section skeleton/length and may protect a strong original chorus for remix continuity; put tighten/chorus-rewrite asks in creator notes.
+**Lyric Rescue** (`AppView.rescue`): paste existing Suno lyrics + optional Style/Exclude + creator intent → `LyricPipeline.rescue` → same results/export pack. Sessions auto-tag `rescue`.
+
+Rescue controls on `LyricRescueInput` (UI switches on `LyricRescueScreen`; chips on results):
+| Flag | Default | Effect |
+|------|---------|--------|
+| `preserveStructureStrictly` | `true` | Keep section tags/order and approx. line counts |
+| `tightenVerseLength` | `false` | Compress verses toward ~6–8 syllables |
+| `rewriteChorus` | `false` | Replace weak/AI hooks with a concrete new chorus |
+
+Constraint text is injected via `constraintsPromptBlock()` into diagnose / rewrite / anti-slop / optimize.
 
 ### 3.4 Data flow
 
@@ -183,9 +192,9 @@ No separate structure LLM pass (draft + optimize own tags/chorus). Temperatures 
 | 3 | `optimize` | Final polish + title | `sunoOptimizeSystem` → JSON |
 | 4 | `style` | Remaster Style/Exclude for paste-back | `rescueStyleSystem` → JSON |
 
-Input model: `LyricRescueInput` (title, lyrics, stylePrompt, excludeStyles, creatorNotes) stored on `SongIdea.rescue` with `mode: 'rescue'`.
+Input model: `LyricRescueInput` (title, lyrics, stylePrompt, excludeStyles, creatorNotes, + constraint flags) stored on `SongIdea.rescue` with `mode: 'rescue'`.
 
-**Expectation:** Rescue preserves section length/skeleton by default (an 8-line verse stays ~8 lines). New-song generation aims tighter (~6–10 syllables/line). Users who want shorter verses or a rewritten chorus should say so in creator notes.
+**Expectation:** With defaults, Rescue preserves section length/skeleton and may protect the chorus (an 8-line verse stays ~8 lines). Enable **Tighten verse length** / **Rewrite chorus** for a harder remaster. New-song generation aims tighter (~6–10 syllables/line) regardless.
 
 Progress is reported via `PassProgressCallback` → UI `PassProgressList`.
 
@@ -322,9 +331,9 @@ flutter test test/prompt_eval_test.dart
 
 ### Natural next features
 - Offline mock generation
-- Stronger Rescue controls (verse length / chorus rewrite toggles) instead of notes-only
 - Suno remix/cover workflow guidance once product-side options are clearer
 - Cross-device sync beyond portable `.tagline.json`
+- Optional Rescue “compare original vs rescued” side-by-side panel
 
 ### Do not
 - Collapse to single-shot generation for “speed.”
@@ -377,7 +386,7 @@ Settings screen rebuilt to match Anima’s NanoGPT connection UX (Tagline theme)
 As of Inspiration DNA + Lyric Rescue:
 - Home modes: **New song** and **Lyric Rescue** (segmented switcher)
 - Inspiration DNA: MusicBrainz + Genius + Deezer (strict title match) → abstract formula + measured audio baseline
-- Lyric Rescue: diagnose → rewrite → anti-slop → optimize → style remaster; sessions tagged `rescue`
+- Lyric Rescue: diagnose → rewrite → anti-slop → optimize → style remaster; sessions tagged `rescue`; toggles for preserve structure / tighten verses / rewrite chorus
 - SafeArea / scroll-from-field fixes
 - Prompt visibility + regenerate / new-idea / history reuse (mode-aware)
 - Export/share (Suno pack + portable `.tagline.json` session/history), Suno feedback, history search+tags, LLM judge, A/B
@@ -385,6 +394,6 @@ As of Inspiration DNA + Lyric Rescue:
 - Prior: streaming, history persistence, local eval, multi-pass, expanded genre/mood favorites
 - Dependencies: `share_plus`, `path_provider`, `path`, `file_picker`, …
 - Platforms: Windows, Linux, Android only
-- Not yet: offline mock generation, cross-device sync, Rescue length/chorus UI toggles
+- Not yet: offline mock generation, cross-device sync
 
 When you change any of the above, update this file, `AGENTS.md`, and `README.md`.

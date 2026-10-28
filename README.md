@@ -12,7 +12,7 @@ Songwriters and producers who use Suno and want lyrics that actually sing: concr
 
 - **Multi-pass generation** (not one-shot): optional Inspiration DNA → voice brief → story arc → draft → anti-slop → Suno optimize → style prompt
 - **Inspiration DNA** — artist/song → MusicBrainz tags + Genius (ephemeral lyric patterns) + Deezer BPM/duration/gain → abstract formula (never a copy)
-- **Lyric Rescue** — separate home mode to paste an existing Suno song (lyrics + Style + your intent) and remaster craft for remix/cover paste-back
+- **Lyric Rescue** — separate home mode to paste an existing Suno song (lyrics + Style + your intent) and remaster craft for remix/cover paste-back, with toggles to preserve structure, tighten verses, or rewrite the chorus
 - **Live streaming** of each pass into the progress UI (SSE via NanoGPT)
 - **Original prompt on results** — view/edit, regenerate from it, or start a new idea; reuse from History
 - **Suno-accurate formatting**: section tags on their own lines; Style = sound only; negatives in Exclude Styles

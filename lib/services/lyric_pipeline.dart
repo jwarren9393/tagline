@@ -417,6 +417,10 @@ $lyrics
 
     final artifacts = <String, String>{};
     final block = input.toPromptBlock();
+    final constraints = input.constraintsPromptBlock();
+    artifacts['rescue_constraints'] = constraints;
+    artifacts['rescue_constraint_labels'] =
+        input.activeConstraintLabels.join(' · ');
     var index = 0;
 
     final diagnoseRaw = await runPass(
@@ -469,6 +473,8 @@ Rewrite the full lyrics now.
       user: '''
 Anti-slop polish for a RESCUED song (keep identity + creator intent):
 
+$constraints
+
 CREATOR NOTES: ${input.creatorNotes.trim().isEmpty ? '(none)' : input.creatorNotes.trim()}
 
 CURRENT LYRICS:
@@ -490,7 +496,14 @@ $lyrics
     try {
       final optimized = await _client.chat(
         system: SystemPrompts.sunoOptimizeSystem(),
-        user: 'Optimize rescued lyrics for Suno delivery:\n\n$lyrics',
+        user: '''
+Optimize rescued lyrics for Suno delivery.
+
+$constraints
+
+LYRICS:
+$lyrics
+''',
         temperature: 0.5,
         onToken: (accumulated) {
           update(
@@ -590,6 +603,10 @@ $lyrics
     if (notes.isEmpty) {
       notes =
           'Rescued lyrics — paste into Suno as a remix/cover/reuse with the remastered Style.';
+    }
+    final labels = input.activeConstraintLabels.join(' · ');
+    if (labels.isNotEmpty && !notes.toLowerCase().contains('constraint')) {
+      notes = '$notes Constraints: $labels.';
     }
 
     return GenerationResult(

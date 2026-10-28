@@ -22,6 +22,10 @@ class _LyricRescueScreenState extends State<LyricRescueScreen> {
   late final TextEditingController _exclude;
   late final TextEditingController _notes;
 
+  late bool _preserveStructure;
+  late bool _tightenVerses;
+  late bool _rewriteChorus;
+
   @override
   void initState() {
     super.initState();
@@ -32,6 +36,9 @@ class _LyricRescueScreenState extends State<LyricRescueScreen> {
     _style = TextEditingController(text: rescue.stylePrompt);
     _exclude = TextEditingController(text: rescue.excludeStyles);
     _notes = TextEditingController(text: rescue.creatorNotes);
+    _preserveStructure = rescue.preserveStructureStrictly;
+    _tightenVerses = rescue.tightenVerseLength;
+    _rewriteChorus = rescue.rewriteChorus;
   }
 
   @override
@@ -51,6 +58,9 @@ class _LyricRescueScreenState extends State<LyricRescueScreen> {
       stylePrompt: _style.text,
       excludeStyles: _exclude.text,
       creatorNotes: _notes.text,
+      preserveStructureStrictly: _preserveStructure,
+      tightenVerseLength: _tightenVerses,
+      rewriteChorus: _rewriteChorus,
     );
     final notes = _notes.text.trim();
     final title = _title.text.trim();
@@ -139,7 +149,40 @@ class _LyricRescueScreenState extends State<LyricRescueScreen> {
                     hintText: 'As named in Suno / your library',
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
+                Text(
+                  'Rescue controls',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Choose what to protect vs rewrite. Defaults keep structure '
+                  'and the original chorus feel.',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 12.5,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _RescueControlsCard(
+                  preserveStructure: _preserveStructure,
+                  tightenVerses: _tightenVerses,
+                  rewriteChorus: _rewriteChorus,
+                  onPreserve: (v) {
+                    setState(() => _preserveStructure = v);
+                    _sync(gen);
+                  },
+                  onTighten: (v) {
+                    setState(() => _tightenVerses = v);
+                    _sync(gen);
+                  },
+                  onRewriteChorus: (v) {
+                    setState(() => _rewriteChorus = v);
+                    _sync(gen);
+                  },
+                ),
+                const SizedBox(height: 18),
                 Text(
                   'Your intent / thoughts',
                   style: Theme.of(context).textTheme.titleMedium,
@@ -250,6 +293,72 @@ class _LyricRescueScreenState extends State<LyricRescueScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _RescueControlsCard extends StatelessWidget {
+  const _RescueControlsCard({
+    required this.preserveStructure,
+    required this.tightenVerses,
+    required this.rewriteChorus,
+    required this.onPreserve,
+    required this.onTighten,
+    required this.onRewriteChorus,
+  });
+
+  final bool preserveStructure;
+  final bool tightenVerses;
+  final bool rewriteChorus;
+  final ValueChanged<bool> onPreserve;
+  final ValueChanged<bool> onTighten;
+  final ValueChanged<bool> onRewriteChorus;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+      decoration: BoxDecoration(
+        color: AppColors.inkElevated,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Column(
+        children: [
+          SwitchListTile.adaptive(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+            title: const Text('Preserve structure strictly'),
+            subtitle: const Text(
+              'Keep section order and roughly the same length (default)',
+              style: TextStyle(fontSize: 12.5, height: 1.3),
+            ),
+            value: preserveStructure,
+            onChanged: onPreserve,
+          ),
+          const Divider(height: 1),
+          SwitchListTile.adaptive(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+            title: const Text('Tighten verse length'),
+            subtitle: const Text(
+              'Aim for shorter, singable lines (~6–8 syllables)',
+              style: TextStyle(fontSize: 12.5, height: 1.3),
+            ),
+            value: tightenVerses,
+            onChanged: onTighten,
+          ),
+          const Divider(height: 1),
+          SwitchListTile.adaptive(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+            title: const Text('Rewrite chorus'),
+            subtitle: const Text(
+              'Replace a weak / AI hook with a concrete Suno-friendly one',
+              style: TextStyle(fontSize: 12.5, height: 1.3),
+            ),
+            value: rewriteChorus,
+            onChanged: onRewriteChorus,
+          ),
+        ],
+      ),
     );
   }
 }

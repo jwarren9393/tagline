@@ -219,26 +219,52 @@ class _ResultsScreenState extends State<ResultsScreen> {
           gen.updateIdea(gen.idea.copyWith(rawIdea: v));
         }
       },
-      footer: Wrap(
-        spacing: 8,
-        runSpacing: 8,
+      footer: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          FilledButton.tonalIcon(
-            onPressed: gen.busy ? null : () => gen.regenerateFromPrompt(),
-            icon: Icon(
-              isRescue ? Icons.healing_outlined : Icons.auto_awesome,
-              size: 18,
+          if (isRescue &&
+              gen.idea.rescue != null &&
+              gen.idea.rescue!.activeConstraintLabels.isNotEmpty) ...[
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final label in gen.idea.rescue!.activeConstraintLabels)
+                  Chip(
+                    visualDensity: VisualDensity.compact,
+                    label: Text(
+                      label,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+              ],
             ),
-            label: Text(
-              isRescue
-                  ? 'Re-rescue from this paste'
-                  : 'Regenerate from this prompt',
-            ),
-          ),
-          OutlinedButton.icon(
-            onPressed: gen.busy ? null : () => gen.usePromptAsNewIdea(),
-            icon: const Icon(Icons.edit_note, size: 18),
-            label: Text(isRescue ? 'Edit rescue paste' : 'Edit as new idea'),
+            const SizedBox(height: 10),
+          ],
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: gen.busy ? null : () => gen.regenerateFromPrompt(),
+                icon: Icon(
+                  isRescue ? Icons.healing_outlined : Icons.auto_awesome,
+                  size: 18,
+                ),
+                label: Text(
+                  isRescue
+                      ? 'Re-rescue from this paste'
+                      : 'Regenerate from this prompt',
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: gen.busy ? null : () => gen.usePromptAsNewIdea(),
+                icon: const Icon(Icons.edit_note, size: 18),
+                label: Text(
+                  isRescue ? 'Edit rescue paste' : 'Edit as new idea',
+                ),
+              ),
+            ],
           ),
         ],
       ),
