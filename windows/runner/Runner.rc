@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.tagline" "\0"
-            VALUE "FileDescription", "tagline" "\0"
+            VALUE "FileDescription", "Tagline" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "tagline" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.tagline. All rights reserved." "\0"
             VALUE "OriginalFilename", "tagline.exe" "\0"
-            VALUE "ProductName", "tagline" "\0"
+            VALUE "ProductName", "Tagline" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

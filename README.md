@@ -26,6 +26,7 @@ Songwriters and producers who use Suno and want lyrics that actually sing: concr
 - **Genre templates**, section regen, refinement chat
 - **Anima-style API & connection** — live model catalog, credits sheet, favorites, subscription toggle
 - **Secure NanoGPT API key** storage (`flutter_secure_storage`)
+- **Branded launcher icon** — amber serif **T** on charcoal (Android / Windows)
 
 ## Platforms
 

@@ -92,6 +92,11 @@ lib/
 - Craft prompts include stronger few-shots (tight soul/scene verses + concrete choruses) and expanded AI-pastiche cliché families (phoenix stacks, workshop filler, midnight-city mood boards).
 - Model shortlist (also in Settings chips): sub `deepseek/deepseek-v4-pro`, `z-ai/glm-5.3`, `meta-llama/llama-4-maverick`; PAYG quality `anthropic/claude-sonnet-5.5`, `anthropic/claude-opus-5.5`.
 
+## Recent agent action (2026-11-09)
+
+- Added branded launcher icon (`assets/branding/tagline_icon.png` — amber serif **T** + note on charcoal) via `flutter_launcher_icons` for Android/Windows.
+- Display name capitalized to **Tagline** (Android label + Windows/Linux window titles). Build **1.0.0+2**.
+
 ## Known issues / TODOs
 
 - Full `TaglineApp` widget tests can hang on Google Fonts — keep service tests.
