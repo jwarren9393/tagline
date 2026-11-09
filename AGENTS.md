@@ -1,13 +1,6 @@
 # AGENTS.md — Tagline (for Cursor agents)
 
-> **Mandatory for every agent session:** Read this file fully at the start.
-> Update it before you finish any meaningful phase of work.
-> Three **living documents** must stay current after meaningful work: **`AGENTS.md`** (always), **`PROJECT_REFERENCE.md`** (when mechanics/architecture changed), **`README.md`** (when anything user-visible changed).
-> Same upkeep rule as Anima / Journey. Keep language clear enough that a coding beginner (the project owner) can follow it.
->
-> **Full project encyclopedia:** [`PROJECT_REFERENCE.md`](PROJECT_REFERENCE.md)
-
-**Last local recovery:** 2026-11-08 — owner lost the Windows working copy; restored from GitHub `jwarren9393/tagline` @ `1e1a7ed` (Lyric Rescue craft toggles). A throwaway rebuild attempt is kept only as local branch `rebuild-baseline` (not pushed).
+Living document. **Update this whenever you make meaningful changes.**
 
 ## What this app is
 
