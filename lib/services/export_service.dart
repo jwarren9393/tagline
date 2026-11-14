@@ -5,12 +5,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../models/generation_result.dart';
 import '../models/generation_session.dart';
 import '../models/song_idea.dart';
+import 'app_paths.dart';
 
 /// Clipboard packs, share sheets, and portable session import/export.
 class ExportService {
@@ -269,7 +269,7 @@ class ExportService {
     required String fileName,
     required String contents,
   }) async {
-    final dir = await getTemporaryDirectory();
+    final dir = await AppPaths.portableTemporaryDirectory();
     final file = File(p.join(dir.path, fileName));
     await file.writeAsString(contents);
     return file;

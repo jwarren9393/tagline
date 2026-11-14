@@ -32,6 +32,18 @@ Songwriters and producers who use Suno and want lyrics that actually sing: concr
 
 Native Flutter app for **Windows**, **Linux**, and **Android**. No web build.
 
+### Portable data folder
+
+Tagline keeps its own state in a single **`userdata/`** folder (Boundless-style):
+
+| Platform | Where |
+|----------|--------|
+| **Windows** | Next to `tagline.exe` → `userdata/` (zip the whole install folder and it stays self-contained) |
+| **Android** | App external files → `Android/data/com.tagline.tagline/files/userdata/` when available (USB-visible). Android still needs a normal APK install — it cannot be a free-moving portable zip like Windows. |
+| **Linux** | Under the app documents tree → `userdata/` |
+
+Inside: history JSON, `settings.json`, `api_key.txt`, temp export staging. **Settings → Data folder** shows the path and can copy it.
+
 ## Setup
 
 ### Prerequisites
@@ -62,6 +74,8 @@ flutter build linux
 flutter run -d windows
 # or
 flutter build windows
+# Release output: build/windows/x64/runner/Release/
+# Copy that folder (or zip it) — userdata/ appears beside tagline.exe on first run.
 ```
 
 **Android**
@@ -75,8 +89,9 @@ flutter build apk
 ### First launch
 
 1. Open **Settings** (gear icon).
-2. Paste your NanoGPT API key and save.
+2. Paste your NanoGPT API key and save (stored in `userdata/api_key.txt`).
 3. Prefer **subscription endpoint** if you use a NanoGPT subscription.
+4. Optional: open **Data folder** on the Settings hub to confirm/copy the portable path.
 4. Pick a model ID from the NanoGPT catalog (defaults to `openai/gpt-4o`).
 5. Return home, enter a song idea, optionally pick genre/moods, then **Generate**.
 

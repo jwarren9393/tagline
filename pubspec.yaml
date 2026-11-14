@@ -1,7 +1,7 @@
 name: tagline
 description: "Expert pre-production tool for Suno AI"
 publish_to: 'none'
-version: 1.0.0+2
+version: 1.0.1+3
 
 environment:
   sdk: ^3.13.5

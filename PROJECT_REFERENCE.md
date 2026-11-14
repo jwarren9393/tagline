@@ -44,8 +44,8 @@ Quality is enforced primarily through **system prompts, few-shot examples, and m
 - Flutter Material 3
 - **State management:** `provider` (`SettingsProvider`, `GenerationProvider`)
 - **HTTP:** `http` package → NanoGPT OpenAI-compatible Chat Completions
-- **Secrets:** `flutter_secure_storage` (API key)
-- **Prefs:** `shared_preferences` (model ID, subscription toggle)
+- **Portable storage:** `AppPaths` + `PortableDataMigrator` — all ongoing writes under `userdata/`
+- **API key / prefs:** `api_key.txt` + `settings.json` under userdata (migrator can import legacy secure storage / SharedPreferences once)
 - **Fonts:** `google_fonts` (Fraunces display, Source Sans 3 body)
 - **IDs:** `uuid` (available; not heavily used yet)
 
@@ -63,10 +63,12 @@ lib/
   data/cliche_families.dart, genre_templates.dart, eval_fixtures.dart
   prompts/system_prompts.dart          # CORE EXPERTISE (craft + DNA + rescue + judge + A/B)
   services/
+    app_paths.dart, portable_data_migrator.dart
     nanogpt_client.dart, nanogpt_catalog_service.dart
     lyric_pipeline.dart                # generate + rescue + A/B branch
     inspiration_dna_service.dart
     musicbrainz_client.dart, genius_client.dart, deezer_client.dart
+    secure_settings.dart, history_store.dart
     track_match.dart                   # strict title match shared by Genius/Deezer
     history_store.dart, export_service.dart
     prompt_eval.dart, llm_judge.dart
@@ -155,12 +157,24 @@ OpenAI-compatible non-streaming JSON:
 ```
 
 ### Settings fields
-- API key → secure storage key `nanogpt_api_key`
-- Model → prefs `nanogpt_model` (default `openai/gpt-4o`)
-- Use subscription → prefs `nanogpt_use_subscription` (default `true`)
+- API key → `userdata/api_key.txt`
+- Model → `userdata/settings.json` key `nanogpt_model` (default `openai/gpt-4o`)
+- Use subscription → `settings.json` key `nanogpt_use_subscription` (default `true`)
 
 Client: `lib/services/nanogpt_client.dart`  
 JSON extraction helper: `extractJsonObject()` (handles fences / surrounding prose).
+
+### Portable userdata layout
+
+| Platform | Root |
+|----------|------|
+| **Windows** | `<dirname(Platform.resolvedExecutable)>/userdata/` |
+| **Android** | `<getExternalStorageDirectory()>/userdata/` when available (USB-visible under `Android/data/com.tagline.tagline/files/userdata`); else documents `userdata/` |
+| **Linux** | `<documents>/userdata/` |
+
+Contents: `tagline_history.json`, `settings.json`, `api_key.txt`, `temp/`, marker `.migrated_portable_v1`.  
+Settings hub shows the absolute path with copy-to-clipboard.  
+**Android honesty:** the app cannot be a fully portable zip like Windows. Package install is required; `userdata/` under external files is the best USB-browsable location. Private app sandbox (`app_flutter`) is no longer the ongoing store when external files are available.
 
 ---
 
@@ -292,7 +306,7 @@ Prefer unit tests for pipeline helpers (`syllable_analyzer_test.dart`, idea prom
 ## 12. Generation history
 
 - Model: `GenerationSession` (`id`, timestamps, `SongIdea`, `GenerationResult`, optional `EvalSummary`, `pinned`)
-- Store: `HistoryStore` → `tagline_history.json` in application documents directory (`path_provider`)
+- Store: `HistoryStore` → `userdata/tagline_history.json` via `AppPaths`
 - Cap: 200 sessions (drops oldest unpinned first)
 - Auto-upsert after successful generate and after tools that change lyrics; manual **Save** on results screen
 - UI: `HistoryScreen` (open / pin / delete / import / export)
@@ -368,7 +382,7 @@ flutter test test/prompt_eval_test.dart
 ## 19. API & connection (Anima-parity)
 
 Settings screen rebuilt to match Anima’s NanoGPT connection UX (Tagline theme):
-- Key save/remove via secure storage (separate from model save)
+- Key save/remove via `userdata/api_key.txt` (separate from model save)
 - Credits sheet: `POST /api/check-balance` + `GET /api/subscription/v1/usage` in parallel
 - Live catalog: `GET {baseUrl}/models?detailed=true`
 - Filters: Category (incl. broad uncensored) → Min context → Provider (Auto first)
@@ -383,7 +397,7 @@ Settings screen rebuilt to match Anima’s NanoGPT connection UX (Tagline theme)
 
 ## 20. Current implementation snapshot
 
-As of Inspiration DNA + Lyric Rescue:
+As of portable userdata **1.0.1+3** + Inspiration DNA + Lyric Rescue:
 - Home modes: **New song** and **Lyric Rescue** (segmented switcher)
 - Inspiration DNA: MusicBrainz + Genius + Deezer (strict title match) → abstract formula + measured audio baseline
 - Lyric Rescue: diagnose → rewrite → anti-slop → optimize → style remaster; sessions tagged `rescue`; toggles for preserve structure / tighten verses / rewrite chorus
@@ -391,6 +405,7 @@ As of Inspiration DNA + Lyric Rescue:
 - Prompt visibility + regenerate / new-idea / history reuse (mode-aware)
 - Export/share (Suno pack + portable `.tagline.json` session/history), Suno feedback, history search+tags, LLM judge, A/B
 - Live NanoGPT catalog / credits / favorites settings (Anima-parity UX)
+- Portable `userdata/` (Windows exe-dir; Android external files when possible) + Settings Data folder tile
 - Prior: streaming, history persistence, local eval, multi-pass, expanded genre/mood favorites
 - Dependencies: `share_plus`, `path_provider`, `path`, `file_picker`, …
 - Platforms: Windows, Linux, Android only

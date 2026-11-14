@@ -100,7 +100,7 @@ class _ApiSettingsScreenState extends State<ApiSettingsScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Tagline stores the key with flutter_secure_storage. '
+              'Tagline stores the key in the portable data folder (api_key.txt). '
               'It is never committed or logged.',
               style: TextStyle(color: AppColors.textMuted, height: 1.4),
             ),

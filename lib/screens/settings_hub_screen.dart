@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../services/app_paths.dart';
 import '../theme/app_theme.dart';
 import 'api_settings_screen.dart';
 
@@ -41,6 +43,74 @@ class SettingsHubScreen extends StatelessWidget {
               subtitle:
                   'Lives on New Idea — MB + Genius + Deezer BPM → abstract formula, never a copy',
               enabled: false,
+            ),
+            if (AppPaths.isInitialized) ...[
+              const SizedBox(height: 10),
+              _DataFolderTile(path: AppPaths.instance.root.path),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DataFolderTile extends StatelessWidget {
+  const _DataFolderTile({required this.path});
+
+  final String path;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.inkElevated,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        key: const Key('settings_data_folder'),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.line),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.folder_outlined, color: AppColors.amber),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Data folder',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    path,
+                    style: const TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12.5,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: 'Copy path',
+              icon: const Icon(Icons.copy_outlined, color: AppColors.textMuted),
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: path));
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Data folder path copied')),
+                );
+              },
             ),
           ],
         ),

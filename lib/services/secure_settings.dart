@@ -1,23 +1,26 @@
 import 'dart:convert';
+import 'dart:io';
 
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path/path.dart' as p;
 
-/// Persists API credentials securely and non-secret prefs plainly.
+import 'app_paths.dart';
+
+/// Persists API credentials and prefs under the portable userdata root.
+///
+/// - `api_key.txt` — NanoGPT key (travels with the install folder on Windows)
+/// - `settings.json` — model, subscription flag, favorites, genres, moods
 class SecureSettings {
-  SecureSettings({
-    FlutterSecureStorage? storage,
-  }) : _storage = storage ?? const FlutterSecureStorage();
+  SecureSettings({Directory? overrideRoot}) : _overrideRoot = overrideRoot;
 
-  final FlutterSecureStorage _storage;
+  final Directory? _overrideRoot;
 
-  static const _apiKeyKey = 'nanogpt_api_key';
-  static const _modelKey = 'nanogpt_model';
-  static const _baseUrlKey = 'nanogpt_base_url';
-  static const _useSubscriptionKey = 'nanogpt_use_subscription';
-  static const _favoritesKey = 'nanogpt_favorite_models';
-  static const _favoriteGenresKey = 'tagline_favorite_genres';
-  static const _favoriteMoodsKey = 'tagline_favorite_moods';
+  static const apiKeyStorageKey = 'nanogpt_api_key';
+  static const modelKey = 'nanogpt_model';
+  static const baseUrlKey = 'nanogpt_base_url';
+  static const useSubscriptionKey = 'nanogpt_use_subscription';
+  static const favoritesKey = 'nanogpt_favorite_models';
+  static const favoriteGenresKey = 'tagline_favorite_genres';
+  static const favoriteMoodsKey = 'tagline_favorite_moods';
 
   static const defaultModel = 'openai/gpt-4o';
 
@@ -28,72 +31,127 @@ class SecureSettings {
   static const subscriptionBaseUrl =
       'https://nano-gpt.com/api/subscription/v1';
 
-  Future<String?> getApiKey() => _storage.read(key: _apiKeyKey);
+  Future<Directory> _root() async {
+    final override = _overrideRoot;
+    if (override != null) {
+      await override.create(recursive: true);
+      return override;
+    }
+    return AppPaths.portableDocumentsDirectory();
+  }
+
+  Future<File> _apiKeyFile() async =>
+      File(p.join((await _root()).path, AppPaths.apiKeyFileName));
+
+  Future<File> _settingsFile() async =>
+      File(p.join((await _root()).path, AppPaths.settingsFileName));
+
+  Future<Map<String, dynamic>> _readSettings() async {
+    final file = await _settingsFile();
+    if (!await file.exists()) return {};
+    try {
+      final decoded = jsonDecode(await file.readAsString());
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+    } catch (_) {}
+    return {};
+  }
+
+  Future<void> _writeSettings(Map<String, dynamic> map) async {
+    final file = await _settingsFile();
+    await file.parent.create(recursive: true);
+    await file.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(map),
+      flush: true,
+    );
+  }
+
+  Future<String?> getApiKey() async {
+    final file = await _apiKeyFile();
+    if (!await file.exists()) return null;
+    final value = (await file.readAsString()).trim();
+    return value.isEmpty ? null : value;
+  }
 
   Future<void> setApiKey(String? value) async {
+    final file = await _apiKeyFile();
     if (value == null || value.trim().isEmpty) {
-      await _storage.delete(key: _apiKeyKey);
-    } else {
-      await _storage.write(key: _apiKeyKey, value: value.trim());
+      if (await file.exists()) await file.delete();
+      return;
     }
+    await file.parent.create(recursive: true);
+    await file.writeAsString(value.trim(), flush: true);
   }
 
   Future<String> getModel() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_modelKey) ?? defaultModel;
+    final map = await _readSettings();
+    final value = '${map[modelKey] ?? ''}'.trim();
+    return value.isEmpty ? defaultModel : value;
   }
 
   Future<void> setModel(String model) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_modelKey, model.trim());
+    final map = await _readSettings();
+    map[modelKey] = model.trim();
+    await _writeSettings(map);
   }
 
   Future<String> getBaseUrl() async {
-    final prefs = await SharedPreferences.getInstance();
-    final useSub = prefs.getBool(_useSubscriptionKey) ?? true;
-    if (useSub) return subscriptionBaseUrl;
-    return prefs.getString(_baseUrlKey) ?? defaultBaseUrl;
+    if (await getUseSubscription()) return subscriptionBaseUrl;
+    final map = await _readSettings();
+    final custom = '${map[baseUrlKey] ?? ''}'.trim();
+    return custom.isEmpty ? defaultBaseUrl : custom;
   }
 
   Future<bool> getUseSubscription() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_useSubscriptionKey) ?? true;
+    final map = await _readSettings();
+    if (!map.containsKey(useSubscriptionKey)) return true;
+    return map[useSubscriptionKey] == true;
   }
 
   Future<void> setUseSubscription(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_useSubscriptionKey, value);
+    final map = await _readSettings();
+    map[useSubscriptionKey] = value;
+    await _writeSettings(map);
   }
 
   Future<void> setCustomBaseUrl(String url) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_baseUrlKey, url.trim());
+    final map = await _readSettings();
+    map[baseUrlKey] = url.trim();
+    await _writeSettings(map);
   }
 
   /// Favorite model ids, newest first.
   Future<List<FavoriteModel>> getFavorites() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_favoritesKey);
-    if (raw == null || raw.isEmpty) return [];
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) return [];
-      return decoded
+    final map = await _readSettings();
+    final raw = map[favoritesKey];
+    if (raw is String && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is! List) return [];
+        return decoded
+            .whereType<Map>()
+            .map((e) => FavoriteModel.fromJson(Map<String, dynamic>.from(e)))
+            .where((f) => f.id.isNotEmpty)
+            .toList();
+      } catch (_) {
+        return [];
+      }
+    }
+    if (raw is List) {
+      return raw
           .whereType<Map>()
           .map((e) => FavoriteModel.fromJson(Map<String, dynamic>.from(e)))
           .where((f) => f.id.isNotEmpty)
           .toList();
-    } catch (_) {
-      return [];
     }
+    return [];
   }
 
   Future<void> setFavorites(List<FavoriteModel> favorites) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _favoritesKey,
-      jsonEncode(favorites.map((f) => f.toJson()).toList()),
-    );
+    final map = await _readSettings();
+    map[favoritesKey] = favorites.map((f) => f.toJson()).toList();
+    await _writeSettings(map);
   }
 
   Future<List<FavoriteModel>> toggleFavorite(FavoriteModel entry) async {
@@ -107,13 +165,18 @@ class SecureSettings {
   }
 
   Future<List<String>> getFavoriteGenreIds() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getStringList(_favoriteGenresKey) ?? const [];
+    final map = await _readSettings();
+    final raw = map[favoriteGenresKey];
+    if (raw is List) {
+      return [for (final e in raw) '$e'];
+    }
+    return const [];
   }
 
   Future<void> setFavoriteGenreIds(List<String> ids) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(_favoriteGenresKey, ids);
+    final map = await _readSettings();
+    map[favoriteGenresKey] = ids;
+    await _writeSettings(map);
   }
 
   Future<List<String>> toggleFavoriteGenreId(String id) async {
@@ -126,13 +189,18 @@ class SecureSettings {
   }
 
   Future<List<String>> getFavoriteMoods() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getStringList(_favoriteMoodsKey) ?? const [];
+    final map = await _readSettings();
+    final raw = map[favoriteMoodsKey];
+    if (raw is List) {
+      return [for (final e in raw) '$e'];
+    }
+    return const [];
   }
 
   Future<void> setFavoriteMoods(List<String> moods) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(_favoriteMoodsKey, moods);
+    final map = await _readSettings();
+    map[favoriteMoodsKey] = moods;
+    await _writeSettings(map);
   }
 
   Future<List<String>> toggleFavoriteMood(String mood) async {

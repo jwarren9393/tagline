@@ -87,7 +87,6 @@ void main() {
     final client = DeezerClient(
       httpClient: MockClient((req) async {
         fail('should not call API without song title');
-        return http.Response('{}', 200);
       }),
     );
     final hint = await client.lookupTrack(

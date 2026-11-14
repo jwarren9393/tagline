@@ -2,20 +2,20 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import '../models/generation_session.dart';
+import 'app_paths.dart';
 
-/// JSON file store for generation sessions under the app documents directory.
+/// JSON file store for generation sessions under the portable userdata root.
 class HistoryStore {
   HistoryStore({this.overrideDir});
 
   final Directory? overrideDir;
-  static const _fileName = 'tagline_history.json';
+  static const _fileName = AppPaths.historyFileName;
   static const maxSessions = 200;
 
   Future<File> _file() async {
-    final dir = overrideDir ?? await getApplicationDocumentsDirectory();
+    final dir = overrideDir ?? await AppPaths.portableDocumentsDirectory();
     return File(p.join(dir.path, _fileName));
   }
 

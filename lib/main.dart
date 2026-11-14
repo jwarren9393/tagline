@@ -4,11 +4,16 @@ import 'package:provider/provider.dart';
 import 'providers/generation_provider.dart';
 import 'providers/settings_provider.dart';
 import 'screens/home_shell.dart';
+import 'services/app_paths.dart';
+import 'services/portable_data_migrator.dart';
 import 'services/secure_settings.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final paths = await AppPaths.init();
+  await PortableDataMigrator.migrateIfNeeded(paths);
+
   final secure = SecureSettings();
   final settings = SettingsProvider(secure);
   await settings.load();
