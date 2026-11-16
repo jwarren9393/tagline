@@ -66,7 +66,7 @@ lib/
 | Anima-style API & connection settings (catalog/credits/favorites) | Done |
 | Portable session import/export (`.tagline.json`) | Done |
 | Share Suno pack (file-only; desktop save dialog) | Done |
-| Portable userdata/ (Windows exe-dir; Android external files) | Done |
+| Portable userdata/ (Windows/Linux exe-dir; Android external files) | Done |
 | Offline mock generation | Not started |
 | iOS / macOS / web | Out of scope |
 
@@ -94,7 +94,11 @@ lib/
 - Craft prompts include stronger few-shots (tight soul/scene verses + concrete choruses) and expanded AI-pastiche cliché families (phoenix stacks, workshop filler, midnight-city mood boards).
 - Model shortlist (also in Settings chips): sub `deepseek/deepseek-v4-pro`, `z-ai/glm-5.3`, `meta-llama/llama-4-maverick`; PAYG quality `anthropic/claude-sonnet-5.5`, `anthropic/claude-opus-5.5`.
 
-## Recent agent action (2026-11-13)
+## Recent agent action (2026-11-15)
+
+- **Kubuntu NVMe migration.** Linux portable userdata now uses `<exeDir>/userdata/` (same as Windows). Checkout `~/Git and Cursor/Git Repos/tagline`; install `~/Git and Cursor/Installed Linux Cursor Apps/tagline/` + `tagline.desktop`. Flutter **3.50.0** host; Jay-Storage was transfer-only.
+
+## Previous agent action (2026-11-13)
 
 - **Portable userdata (Boundless-style).** Windows: `<exeDir>/userdata/`. Android: `getExternalStorageDirectory()/userdata/` (USB-visible under `Android/data/com.tagline.tagline/files/userdata`) with documents fallback. History, `settings.json`, `api_key.txt`, and export temp staging all live under that root. One-time migrator copies legacy Documents history + SharedPreferences + secure-storage key. Settings hub shows **Data folder** with copy-to-clipboard. Build **1.0.1+3**.
 

@@ -31,7 +31,7 @@ flutter_launcher_icons:
   android: true
   ios: false
   image_path: assets/branding/tagline_icon.png
-  adaptive_icon_background: "#12161A"
+  adaptive_icon_background: "#0A0A0A"
   adaptive_icon_foreground: assets/branding/tagline_icon.png
   windows:
     generate: true

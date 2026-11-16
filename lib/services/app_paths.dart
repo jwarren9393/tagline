@@ -5,13 +5,12 @@ import 'package:path_provider/path_provider.dart';
 
 /// Resolves Tagline's portable on-disk layout.
 ///
-/// **Windows:** `<folder containing tagline.exe>/userdata/`
+/// **Windows / Linux:** `<folder containing the executable>/userdata/`
 /// **Android:** `<app external files>/userdata/` when available (USB-visible
 /// under `Android/data/<package>/files/userdata`), else app documents.
-/// **Linux:** `<documents>/userdata/` (desktop zip can still copy the folder).
 ///
 /// History JSON, settings, API key file, and temp export staging live under
-/// this single [root] so a Windows install folder is self-contained.
+/// this single [root] so the install folder is self-contained.
 class AppPaths {
   AppPaths._(this.root);
 
@@ -62,7 +61,7 @@ class AppPaths {
 
   /// Platform default portable root (no side effects beyond path math).
   static Future<Directory> resolveDefaultRoot() async {
-    if (Platform.isWindows) {
+    if (Platform.isWindows || Platform.isLinux) {
       final exeDir = File(Platform.resolvedExecutable).parent.path;
       return Directory(p.join(exeDir, 'userdata'));
     }
