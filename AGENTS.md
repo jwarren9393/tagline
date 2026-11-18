@@ -96,6 +96,10 @@ lib/
 
 ## Recent agent action (2026-11-18)
 
+- **Android release signing.** Committed `android/keystore/tagline-release.jks` + `android/key.properties` (Anima/Journey pattern). Release APKs no longer use the debug key; resigned APK uploaded to GitHub Release **v1.0.1**. One-time phone uninstall needed if an older debug-signed build is installed (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`).
+
+## Previous agent action (2026-11-18)
+
 - **Kubuntu clean reinstall restore.** Fresh Flutter **3.50.0** / Dart **3.14.0** + Android SDK on internal NVMe. Cloned `main`; Linux release rebuilt + installed with **empty** `userdata/` + `tagline.desktop`. **44** tests passed; smoke-launch OK. Jay-Storage transfer-only (icons/settings/git); no history/API-key restore.
 
 ## Previous agent action (2026-11-15)
@@ -119,9 +123,13 @@ lib/
 - Deezer/Genius only attach on a real title match (miss > wrong song). Deezer BPM coverage is incomplete (bpm=0 or track absent → that source omitted; DNA stays partial).
 - Lyric Rescue defaults protect structure + original chorus feel; use **Tighten verse length** / **Rewrite chorus** (or turn off **Preserve structure**) for a harder remaster.
 
+## Release signing / phone updates
+
+Release APKs are signed with the **committed** key `android/keystore/tagline-release.jks` (settings in `android/key.properties`), so builds from every machine produce installable updates. Personal app — key is kept in-repo on purpose (same as Anima/Journey). Switching from an older debug-signed install needs a one-time `adb uninstall com.tagline.tagline` (userdata under app external files is wiped with uninstall).
+
 ## Agent working rules
 
 1. Update **AGENTS.md**, **README.md**, **PROJECT_REFERENCE.md** after meaningful changes.
 2. Prefer prompt/pipeline quality over speculative UI.
 3. No web/iOS/macOS unless requested.
-4. No secrets in git.
+4. No API keys in git (NanoGPT key stays in `userdata/api_key.txt`). The Android release keystore is committed on purpose so every machine signs the same way.

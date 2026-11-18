@@ -287,6 +287,8 @@ Requires Visual Studio desktop C++ workload. Run: `flutter run -d windows`.
 ### Android
 Standard Flutter Android project under `android/`. Secure storage uses platform defaults (flutter_secure_storage 11.x AndroidOptions API changed — do not use removed `encryptedSharedPreferences` named param).
 
+**Release signing (committed, 2026-11-18):** `android/key.properties` + `android/keystore/tagline-release.jks`. Kept in the repo so Linux and Windows builds share one key (avoids `INSTALL_FAILED_UPDATE_INCOMPATIBLE`). Without those files the release build falls back to debug signing. `lint { checkReleaseBuilds = false }` avoids a known AGP 9 vital-lint crash.
+
 ### Network
 App needs internet for NanoGPT and (on first run) Google Fonts download. Offline generation is not implemented.
 

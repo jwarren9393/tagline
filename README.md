@@ -83,7 +83,9 @@ flutter build windows
 ```bash
 flutter run -d android
 # or
-flutter build apk
+flutter build apk --release
+# Signed with android/keystore/tagline-release.jks (committed; same key on every machine)
+# Output: build/app/outputs/flutter-apk/app-release.apk
 ```
 
 ### First launch
