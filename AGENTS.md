@@ -94,7 +94,11 @@ lib/
 - Craft prompts include stronger few-shots (tight soul/scene verses + concrete choruses) and expanded AI-pastiche cliché families (phoenix stacks, workshop filler, midnight-city mood boards).
 - Model shortlist (also in Settings chips): sub `deepseek/deepseek-v4-pro`, `z-ai/glm-5.3`, `meta-llama/llama-4-maverick`; PAYG quality `anthropic/claude-sonnet-5.5`, `anthropic/claude-opus-5.5`.
 
-## Recent agent action (2026-11-15)
+## Recent agent action (2026-11-18)
+
+- **Kubuntu clean reinstall restore.** Fresh Flutter **3.50.0** / Dart **3.14.0** + Android SDK on internal NVMe. Cloned `main`; Linux release rebuilt + installed with **empty** `userdata/` + `tagline.desktop`. **44** tests passed; smoke-launch OK. Jay-Storage transfer-only (icons/settings/git); no history/API-key restore.
+
+## Previous agent action (2026-11-15)
 
 - **Kubuntu NVMe migration.** Linux portable userdata now uses `<exeDir>/userdata/` (same as Windows). Checkout `~/Git and Cursor/Git Repos/tagline`; install `~/Git and Cursor/Installed Linux Cursor Apps/tagline/` + `tagline.desktop`. Flutter **3.50.0** host; Jay-Storage was transfer-only.
 
